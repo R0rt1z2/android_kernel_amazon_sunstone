@@ -73,8 +73,8 @@ static LIST_HEAD(mtee_clk_list);
 
 static void mtee_clks_init(struct platform_device *pdev)
 {
-	int clks_num;
-	int idx;
+	int clks_num = 0;
+	int idx = 0;
 
 	clks_num = of_property_count_strings(pdev->dev.of_node, "clock-names");
 	for (idx = 0; idx < clks_num; idx++) {
@@ -113,8 +113,8 @@ static void mtee_clks_init(struct platform_device *pdev)
 
 struct clk *mtee_clk_get(const char *clk_name)
 {
-	struct mtee_clk *cur;
-	struct mtee_clk *tmp;
+	struct mtee_clk *cur = NULL;
+	struct mtee_clk *tmp = NULL;
 
 	list_for_each_entry_safe(cur, tmp, &mtee_clk_list, list) {
 		if (strncmp(cur->clk_name, clk_name,
@@ -126,7 +126,8 @@ struct clk *mtee_clk_get(const char *clk_name)
 
 static int mtee_clk_suspend_late(void)
 {
-	struct mtee_clk *cur, *tmp;
+	struct mtee_clk *cur = NULL;
+	struct mtee_clk *tmp = NULL;
 
 	list_for_each_entry_safe(cur, tmp, &mtee_clk_list, list) {
 		clk_disable_unprepare(cur->clk);
@@ -137,7 +138,8 @@ static int mtee_clk_suspend_late(void)
 
 static int mtee_clk_resume_early(void)
 {
-	struct mtee_clk *cur, *tmp;
+	struct mtee_clk *cur = NULL;
+	struct mtee_clk *tmp = NULL;
 
 	list_for_each_entry_safe(cur, tmp, &mtee_clk_list, list) {
 		clk_prepare_enable(cur->clk);
@@ -157,8 +159,8 @@ static LIST_HEAD(mtee_pm_list);
 
 static void mtee_pms_init(struct platform_device *pdev)
 {
-	int pms_num;
-	int idx;
+	int pms_num = 0;
+	int idx = 0;
 
 	pms_num = of_property_count_strings(pdev->dev.of_node, "pm-names");
 	for (idx = 0; idx < pms_num; idx++) {
@@ -198,8 +200,8 @@ static void mtee_pms_init(struct platform_device *pdev)
 
 struct device *mtee_pmdev_get(const char *pm_name)
 {
-	struct mtee_pm *cur;
-	struct mtee_pm *tmp;
+	struct mtee_pm *cur = NULL;
+	struct mtee_pm *tmp = NULL;
 
 	list_for_each_entry_safe(cur, tmp, &mtee_pm_list, list) {
 		if (strncmp(cur->pm_name, pm_name,
@@ -221,7 +223,7 @@ struct device *mtee_pmdev_get(const char *pm_name)
 #if IS_ENABLED(CONFIG_HAS_EARLYSUSPEND)
 static int securetime_savefile(void)
 {
-	int ret = 0;
+	int ret = TZ_RESULT_ERROR_GENERIC;
 
 	KREE_SESSION_HANDLE securetime_session = 0;
 
@@ -249,7 +251,7 @@ static void st_shutdown(struct platform_device *pdev)
 #if IS_ENABLED(CONFIG_PM_SLEEP)
 static int tz_suspend(struct device *pdev)
 {
-	int tzret;
+	int tzret = TZ_RESULT_ERROR_GENERIC;
 
 	tzret = kree_pm_device_ops(MTEE_SUSPEND);
 	return (tzret != TZ_RESULT_SUCCESS) ? (-EBUSY) : (0);
@@ -257,7 +259,7 @@ static int tz_suspend(struct device *pdev)
 
 static int tz_resume(struct device *pdev)
 {
-	int tzret;
+	int tzret = TZ_RESULT_ERROR_GENERIC;
 
 	tzret = kree_pm_device_ops(MTEE_RESUME);
 	return (tzret != TZ_RESULT_SUCCESS) ? (-EBUSY) : (0);
@@ -266,7 +268,7 @@ static int tz_resume(struct device *pdev)
 
 static int tz_suspend_late(struct device *pdev)
 {
-	int tzret;
+	int tzret = TZ_RESULT_ERROR_GENERIC;
 
 	/* disable clocks used in secure os */
 	mtee_clk_suspend_late();
@@ -277,7 +279,7 @@ static int tz_suspend_late(struct device *pdev)
 
 static int tz_resume_early(struct device *pdev)
 {
-	int tzret;
+	int tzret = TZ_RESULT_ERROR_GENERIC;
 
 	/* resume clocks used in secure os */
 	mtee_clk_resume_early();
@@ -328,8 +330,8 @@ struct page __weak *cma_alloc_large(struct cma *cma, int count, unsigned int ali
 int KREE_ServGetWFDChunkmemPool(u32 op,
 			u8 uparam[REE_SERVICE_BUFFER_SIZE])
 {
-	struct ree_service_chunk_mem *chunkmem;
-	int retry;
+	struct ree_service_chunk_mem *chunkmem = NULL;
+	int retry = 0;
 
 	if (!tz_wfd_cma)
 		return TZ_RESULT_ERROR_OUT_OF_MEMORY;
@@ -388,8 +390,8 @@ int KREE_ServReleaseWFDChunkmemPool(u32 op,
 int KREE_ServGetSVPChunkmemPool(u32 op,
 			u8 uparam[REE_SERVICE_BUFFER_SIZE])
 {
-	struct ree_service_chunk_mem *chunkmem;
-	int retry;
+	struct ree_service_chunk_mem *chunkmem = NULL;
+	int retry = 0;
 
 	if (!tz_svp_cma)
 		return TZ_RESULT_ERROR_OUT_OF_MEMORY;
@@ -448,8 +450,8 @@ int KREE_ServReleaseSVPChunkmemPool(u32 op,
 
 int KREE_TeeReleseChunkmemPool(void)
 {
-	int ret;
-	KREE_SESSION_HANDLE mem_session;
+	int ret = TZ_RESULT_ERROR_GENERIC;
+	KREE_SESSION_HANDLE mem_session = 0;
 
 	ret = KREE_CreateSession(TZ_TA_MEM_UUID, &mem_session);
 	if (ret != TZ_RESULT_SUCCESS) {
@@ -490,9 +492,9 @@ int tz_cm_shrinker_thread(void *data)
 
 static int KREE_IsTeeChunkmemPoolReleasable(int *releasable)
 {
-	int ret;
-	KREE_SESSION_HANDLE mem_session;
-	union MTEEC_PARAM param[4];
+	int ret = TZ_RESULT_ERROR_GENERIC;
+	KREE_SESSION_HANDLE mem_session = 0;
+	union MTEEC_PARAM param[4] = {0};
 
 	if (releasable == NULL)
 		return TZ_RESULT_ERROR_BAD_FORMAT;
@@ -518,7 +520,7 @@ static int KREE_IsTeeChunkmemPoolReleasable(int *releasable)
 static unsigned long tz_cm_count(struct shrinker *s,
 						struct shrink_control *sc)
 {
-	int releasable;
+	int releasable = 0;
 
 	if (secure_pages == NULL)
 		return 0;
@@ -561,10 +563,10 @@ static struct shrinker tz_cm_shrinker = {
  */
 static int kree_thread_function(void *arg)
 {
-	union MTEEC_PARAM param[4];
-	int ret;
+	union MTEEC_PARAM param[4] = {0};
+	int ret = TZ_RESULT_ERROR_GENERIC;
 	struct ree_service_thrd *info = (struct ree_service_thrd *)arg;
-	KREE_SESSION_HANDLE local_syssess;
+	KREE_SESSION_HANDLE local_syssess = 0;
 
 	ret = KREE_CreateSession(PTA_SYSTEM_UUID_STRING, &local_syssess);
 
@@ -593,7 +595,7 @@ static int kree_thread_function(void *arg)
 static int KREE_ServThreadCreate(u32 op,
 			u8 uparam[REE_SERVICE_BUFFER_SIZE])
 {
-	struct ree_service_thrd *info;
+	struct ree_service_thrd *info = NULL;
 
 	/* get parameters */
 	/* the resource will be freed when the thread starts */
@@ -613,11 +615,11 @@ static int KREE_ServThreadCreate(u32 op,
 
 static int ree_service(void *data)
 {
-	int ret;
-	union MTEEC_PARAM param[4];
-	KREE_SHAREDMEM_HANDLE shmh;
-	struct KREE_SHAREDMEM_PARAM shmparam;
-	KREE_SESSION_HANDLE local_syssess;
+	int ret = TZ_RESULT_ERROR_GENERIC;
+	union MTEEC_PARAM param[4] = {0};
+	KREE_SHAREDMEM_HANDLE shmh = 0;
+	struct KREE_SHAREDMEM_PARAM shmparam = {0};
+	KREE_SESSION_HANDLE local_syssess = 0;
 
 	shmparam.size = 512;
 	shmparam.buffer = kmalloc(shmparam.size, GFP_KERNEL);
@@ -710,16 +712,16 @@ static int ree_service(void *data)
 
 static int mtee_probe(struct platform_device *pdev)
 {
-	int tzret;
-	struct task_struct *ree_thread;
+	int tzret = TZ_RESULT_ERROR_GENERIC;
+	struct task_struct *ree_thread = NULL;
 #ifdef ENABLE_INC_ONLY_COUNTER
-	struct task_struct *thread;
+	struct task_struct *thread = NULL;
 #endif
 #ifdef TZ_SECURETIME_SUPPORT
-	struct task_struct *thread_securetime_gb;
+	struct task_struct *thread_securetime_gb = NULL;
 #endif
 #ifdef TZ_PLAYREADY_SECURETIME_SUPPORT
-	struct task_struct *thread_securetime;
+	struct task_struct *thread_securetime = NULL;
 #if IS_ENABLED(CONFIG_HAS_EARLYSUSPEND)
 	register_early_suspend(&securetime_early_suspend);
 #endif
@@ -727,11 +729,11 @@ static int mtee_probe(struct platform_device *pdev)
 
 #if IS_ENABLED(CONFIG_MTEE_CMA_SECURE_MEMORY) && \
 	!defined(NO_CMA_RELEASE_THROUGH_SHRINKER_FOR_EARLY_STAGE)
-	struct task_struct *thread_tz_cm_shrinker;
+	struct task_struct *thread_tz_cm_shrinker = NULL;
 #endif
 
 #if IS_ENABLED(CONFIG_OF)
-	struct device_node *parent_node;
+	struct device_node *parent_node = NULL;
 #if IS_ENABLED(CONFIG_MTEE_CMA_SECURE_MEMORY)
 	struct device_node *np;
 	struct reserved_mem *rmem;
@@ -915,7 +917,7 @@ static void st_early_suspend(struct early_suspend *h)
 
 static void st_late_resume(struct early_suspend *h)
 {
-	int ret = 0;
+	int ret = TZ_RESULT_ERROR_GENERIC;
 	KREE_SESSION_HANDLE securetime_session = 0;
 
 	ret = KREE_CreateSession(TZ_TA_PLAYREADY_UUID, &securetime_session);
