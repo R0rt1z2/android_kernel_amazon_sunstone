@@ -961,10 +961,14 @@ static void mtk_iommu_get_resv_regions(struct device *dev,
 				       struct list_head *head)
 {
 	struct mtk_iommu_data *data = dev_iommu_priv_get(dev), *frstdata;
-	struct list_head *hw_list = data->hw_list;
 	const struct mtk_iommu_iova_region *curdom;
+	struct list_head *hw_list;
 	int regionid;
 
+	if (!data)
+		return;
+
+	hw_list = data->hw_list;
 	frstdata = mtk_iommu_get_frst_data(hw_list);
 	regionid = mtk_iommu_get_iova_region_id(dev, frstdata->plat_data);
 	if (regionid < 0)

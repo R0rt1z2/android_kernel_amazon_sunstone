@@ -423,6 +423,8 @@ static void clkbuf_dts_get_inf_target(struct device_node *node)
 		pr_notice("can not find conn inf target, skip\n");
 	} else {
 		for (i = 0; i < clk_buf_get_xo_num(); i++) {
+			if (!clk_buf_get_xo_name(i))
+				continue;
 			if (!strcmp(clk_buf_get_xo_name(i), target)) {
 				clk_buf_register_xo_ctl_op(target,
 					&clkbuf_pmif.conn_inf_ctl);
@@ -441,6 +443,8 @@ static void clkbuf_dts_get_inf_target(struct device_node *node)
 		pr_notice("can not find nfc inf target, skip\n");
 	} else {
 		for (i = 0; i < clk_buf_get_xo_num(); i++) {
+			if (!clk_buf_get_xo_name(i))
+				continue;
 			if (!strcmp(clk_buf_get_xo_name(i), target)) {
 				clk_buf_register_xo_ctl_op(target,
 					&clkbuf_pmif.nfc_inf_ctl);

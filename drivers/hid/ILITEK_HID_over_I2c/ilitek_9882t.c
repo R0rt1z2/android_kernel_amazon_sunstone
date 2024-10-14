@@ -454,8 +454,8 @@ int ili_hid_sleep_handler(int mode)
 			else
 				ILI_ERR("Failed to disable irq wake: %d\n", wake_status);
 		}
-		if (!(atomic_read(&ilits->gesture)))
-			ili_hid_irq_enable();
+
+		ili_hid_irq_enable();
 
 		/* Set tp as demo mode and reload code if it's iram. */
 		ilits->actual_tp_mode = P5_X_FW_AP_MODE;
@@ -1016,7 +1016,6 @@ static void ili_update_tp_module_info(void)
 
 int ili_hid_tddi_init(void)
 {
-	int ret = 0;
 #if (BOOT_FW_UPDATE | HOST_DOWN_LOAD)
 	struct task_struct *fw_boot_th;
 #endif
@@ -1047,8 +1046,6 @@ int ili_hid_tddi_init(void)
 
 	ilits->pen_serial = INVALID_PEN_SERIAL;
 	ilits->hid_report_irq = false;
-	ilits->stylus_frame_num  = 0;
-	memset(&ilits->stylus_uevent, 0, sizeof(ilits->stylus_uevent));
 
 	ili_hid_ic_init();
 	ilitek_tddi_wq_init();
@@ -1094,10 +1091,6 @@ int ili_hid_tddi_init(void)
 
 	ili_hid_node_init();
 
-	ret = ili_stylus_uevent_init();
-	if (ret < 0)
-		ILI_ERR("stylus uevent init failed %d.\n", ret);
-
 	ili_hid_fw_read_flash_info(OFF);
 
 #if (BOOT_FW_UPDATE | HOST_DOWN_LOAD)
@@ -1137,8 +1130,6 @@ void ili_hid_dev_remove(bool flag)
 
 	kfree(ilits->tr_buf);
 	kfree(ilits->gcoord);
-
-	ili_stylus_uevent_remove();
 
 	ili_sysfs_remove_group(ilits);
 }

@@ -93,9 +93,12 @@ void imgsys_cmdq_init(struct mtk_imgsys_dev *imgsys_dev, const int nr_imgsys_dev
 		#endif
 		/* parse hardware event */
 		for (idx = 0; idx < IMGSYS_CMDQ_EVENT_MAX; idx++) {
-			of_property_read_u16(dev->of_node,
+			if (of_property_read_u16(dev->of_node,
 				imgsys_event[idx].dts_name,
-				&imgsys_event[idx].event);
+				&imgsys_event[idx].event) < 0) {
+				dev_err(imgsys_dev->dev,"%s: of_property_read_u16 fail\n",
+					__func__);
+			}
 			dev_dbg(imgsys_dev->dev,
 				"%s: event idx %d is (%s, %d)\n",
 				__func__, idx, imgsys_event[idx].dts_name,

@@ -828,7 +828,7 @@ static int pogo_extcon_probe(struct platform_device *pdev)
 		goto err_event;
 	}
 
-	input_dev_tlm->name = "abc123 Tablet Mode Switcher";
+	input_dev_tlm->name = "Sanidine Tablet Mode Switcher";
 
 	input_set_capability(input_dev_tlm, EV_SW, SW_TABLET_MODE);
 	ret = input_register_device(input_dev_tlm);

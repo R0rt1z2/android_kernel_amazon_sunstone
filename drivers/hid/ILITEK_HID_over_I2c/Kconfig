@@ -3,7 +3,7 @@
 #
 config I2C_HID_ILITEK
 	tristate "TP ilitek i2c hid enable"
-	depends on I2C_HID
+	depends on I2C_HID && STYLUS_BATTERY_ALGO
 	default n
 	help
 	  say Y to enable driver for Touchpanel using ilitek i2c hid.

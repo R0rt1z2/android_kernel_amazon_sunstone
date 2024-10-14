@@ -77,6 +77,7 @@ static DECLARE_RWSEM(ke_rw_ops_sem);
 
 #define MaxStackSize 8100
 #define MaxMapsSize 65536
+#define LIMIT_MAX_LEN 18
 
 static int ee_num;
 static int kernelapi_num;
@@ -2460,8 +2461,9 @@ static int lookup_atf_log(unsigned char *atf_buffer, struct atf_log *data)
 	struct debug_buf_table_header *debug_buf_table_p;
 	struct debug_buf_hdr *debug_buf_hdr_p;
 	/* The first debug_buf_hdr */
-	u32 debug_buf_hdr_offset;
-	u32 i;
+	u32 debug_buf_hdr_offset = 0;
+	u32 i = 0;
+	u32 len = 0;
 
 	debug_buf_table_p = (struct debug_buf_table_header *)atf_buffer;
 	if (debug_buf_table_p->hdr_size != sizeof(struct debug_buf_table_header)) {
@@ -2474,10 +2476,20 @@ static int lookup_atf_log(unsigned char *atf_buffer, struct atf_log *data)
 	debug_buf_hdr_p = (struct debug_buf_hdr *)((char *)debug_buf_table_p + debug_buf_hdr_offset);
 
 	for (i = 0 ; i < debug_buf_table_p->debug_buf_entry_count; i++) {
-		if (strncmp(debug_buf_hdr_p->debug_buf_name, RUNTIME_LOG_NAME, DEBUG_BUF_NAME_LEN) == 0)
+		len = strnlen(debug_buf_hdr_p->debug_buf_name, DEBUG_BUF_NAME_LEN);
+		if (len == 0 || len == DEBUG_BUF_NAME_LEN) {
+			pr_notice("TFA debug_buf_name check fail\n");
+			return -1;
+		}
+		len = min(strlen(debug_buf_hdr_p->debug_buf_name), strlen(RUNTIME_LOG_NAME));
+		if (strncmp(debug_buf_hdr_p->debug_buf_name, RUNTIME_LOG_NAME, len) == 0)
 			break;
 		debug_buf_hdr_p = (struct debug_buf_hdr *)((char *)debug_buf_hdr_p + debug_buf_hdr_p->debug_buf_size +
 			sizeof(struct debug_buf_hdr));
+	}
+	if (strlen(debug_buf_hdr_p->debug_buf_name) != strlen(RUNTIME_LOG_NAME)) {
+		pr_warn("TFA debug_buf_name not match\n");
+		return -1;
 	}
 	if (i == debug_buf_table_p->debug_buf_entry_count) {
 		pr_warn("Fail to find %s\n", RUNTIME_LOG_NAME);
@@ -2495,6 +2507,7 @@ static int lookup_atf_log(unsigned char *atf_buffer, struct atf_log *data)
 
 static u32 kedump_get_data_info(struct kedump_reserved_buffer *buffer, int index, struct ipanic_data *data)
 {
+	u32 len = 0;
 	u64 header_vaddr = (u64)buffer + sizeof(struct kedump_reserved_buffer)
 				+ sizeof(struct ipanic_data_header) * ipanic_header_idx;
 	struct ipanic_data_header *header = (struct ipanic_data_header *)header_vaddr;
@@ -2504,14 +2517,23 @@ static u32 kedump_get_data_info(struct kedump_reserved_buffer *buffer, int index
 		return 0;
 	}
 
-	if (strncmp(header->name, ipanic_names[index], strlen(ipanic_names[index])) != 0) {
+	len = strnlen(header->name, LIMIT_MAX_LEN);
+	if (len == 0 || len == LIMIT_MAX_LEN) {
+		pr_notice("ipanic_header(%d) header name check fail\n", index);
+		return 0;
+	}
+
+	len = min(strlen(header->name), strlen(ipanic_names[index]));
+	if ((strlen(header->name) != strlen(ipanic_names[index])) ||
+			(strncmp(header->name, ipanic_names[index], len) != 0)) {
 		pr_notice("%s not match %s\n", header->name, ipanic_names[index]);
 		return 0;
 	}
 	data->buffer = (char *)((u64)buffer + header->offset);
 	data->size = header->used;
 
-	if (strncmp(header->name, "TFA_DEBUG_BUF", sizeof("TFA_DEBUG_BUF") - 1) == 0) {
+	len = min(strlen(header->name), strlen("TFA_DEBUG_BUF"));
+	if (strncmp(header->name, "TFA_DEBUG_BUF", len) == 0) {
 		struct atf_log atf_log_data;
 		if (lookup_atf_log(data->buffer, &atf_log_data) == 0) {
 			data->buffer = atf_log_data.buffer;

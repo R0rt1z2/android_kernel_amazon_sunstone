@@ -111,6 +111,10 @@
 #include "sync_write.h"
 #endif
 
+#if IS_ENABLED(CONFIG_STYLUS_BATTERY_ALGO)
+#include "stylus_battery_algo.h"
+#endif
+
 #define DRIVER_VERSION "3.0.7.0.210618"
 
 #define ENABLE 1
@@ -251,10 +255,8 @@ extern bool debug_en;
 #define CLIENT 1
 #define BOTH 2
 
-/* stylus uevent size */
-#define ENV_SIZE 32
-/* Time 100ms by counting the number of data frames. */
-#define PEN_FRAME_COUNT 25
+/* reach SAMPLE_FREQ=10 in different touch modules. 240/10=24. */
+#define PEN_FRAME_COUNT 24
 
 enum TP_SPI_CLK_LIST {
 	TP_SPI_CLK_1M = 1000000,
@@ -532,13 +534,6 @@ struct ilitek_pen_info {
 	bool finger_touch;
 	report_types report_type;
 	pen_data_modes pen_data_mode;
-};
-
-struct stylus_info {
-	char stylus_vendor[ENV_SIZE];
-	char stylus_vendor_id[ENV_SIZE];
-	char stylus_capacity[ENV_SIZE];
-	char stylus_status[ENV_SIZE];
 };
 
 #define TDDI_I2C_ADDR 0x41
@@ -1055,7 +1050,7 @@ struct stylus_info {
 #define MODEL_HSD 3
 
 /*pen id*/
-#define INVALID_PEN_SERIAL 0xFFFFFFFF
+#define INVALID_PEN_SERIAL 0
 #define PEN_DISCONNECT_MAX_TIME (10*60*1000)
 #define ILITEK_HID_PEN_SERIAL_1 21
 #define ILITEK_HID_PEN_SERIAL_2 22
@@ -1067,11 +1062,9 @@ struct stylus_info {
 #define ILITEK_HID_PEN_VENDOR_USAGE_1_H 66
 /* stylus battery strength */
 #define I2C_HID_STYLUS_BATTERY_STRENGTH 52
-/* stylus battery capacity jitter parameter, BATTERY_CAPACITY_JITTER_BUF: 0~100 */
-#define BATTERY_CAPACITY_JITTER_BUF 20
-#define STYLUS_BATTERY_CAPACITY_JITTER_BUF(X)                                  \
-	(X * (100 + BATTERY_CAPACITY_JITTER_BUF) / 100)
-#define STYLUS_VENDOR_USAGE_1P 0x132
+/* stylus fw version */
+#define ILITEK_HID_PEN_FW_VERSION_L 55
+#define ILITEK_HID_PEN_FW_VERSION_H 56
 
 struct ilitek_ts_hid_data {
 	struct i2c_client *i2c;
@@ -1220,14 +1213,6 @@ struct ilitek_ts_hid_data {
 
 	uint32_t pen_serial; //pen id
 	ktime_t pen_touch_time;
-
-	/* stylus device number */
-	dev_t stylus_dev_num;
-	struct device *stylus_dev;
-	struct class *stylus_class;
-	/* stylus uevent */
-	struct stylus_info stylus_uevent;
-	uint32_t stylus_frame_num;
 
 	/* Sending report data to users for the debug */
 	bool dnp; //debug node open
@@ -1582,9 +1567,6 @@ extern void ili_hid_report(u8 *raw_data, int size, struct hid_field *field);
 extern void ili_sysfs_remove_group(struct ilitek_ts_hid_data *ts);
 extern void panel_gesture_mode_set_by_ili9882t(bool gst_mode);
 extern void panel_fw_upgrade_mode_set_by_ilitek(bool upg_mode);
-extern int ili_stylus_uevent_init(void);
-extern void ili_stylus_uevent_remove(void);
-extern int ilitek_stylus_uevent(const u8 *raw_data, bool new_pen);
 
 static inline void ipio_kfree(void **mem)
 {

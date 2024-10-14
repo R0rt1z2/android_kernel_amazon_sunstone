@@ -176,7 +176,7 @@ static int rt9467_adc_probe(struct platform_device *pdev)
 	int ret;
 
 	iio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(*data));
-	if (IS_ERR(iio_dev)) {
+	if (IS_ERR_OR_NULL(iio_dev)) {
 		dev_err(&pdev->dev, "Failed to allocate iio device\n");
 		return PTR_ERR(iio_dev);
 	}

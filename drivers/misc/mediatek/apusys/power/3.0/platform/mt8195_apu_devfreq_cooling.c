@@ -362,7 +362,7 @@ int mt8195_apu_devfreq_cooling_register(struct platform_device *pdev)
 						DEVFREQ_GOV_SIMPLE_ONDEMAND,
 						NULL);
 
-	if (IS_ERR(apu_pwr_devfreq_ptr->apu_devfreq)) {
+	if (IS_ERR_OR_NULL(apu_pwr_devfreq_ptr->apu_devfreq)) {
 		pr_info(
 			"%s error in devm_devfreq_add_device, dvfs_dev_id = %d\n",
 			__func__, dvfs_dev_id);
@@ -407,7 +407,7 @@ int mt8195_apu_devfreq_cooling_register(struct platform_device *pdev)
 				&apu_pwr_devfreq_ptr->cooling_power_ops);
 	of_node_put(of_node);
 
-	if (IS_ERR(apu_pwr_devfreq_ptr->apu_devfreq_cooling)) {
+	if (IS_ERR_OR_NULL(apu_pwr_devfreq_ptr->apu_devfreq_cooling)) {
 		pr_info("%s error in of_devfreq_cooling_register_power\n",
 				__func__);
 		ret = PTR_ERR(apu_pwr_devfreq_ptr->apu_devfreq_cooling);

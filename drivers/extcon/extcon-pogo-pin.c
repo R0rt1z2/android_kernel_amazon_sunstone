@@ -47,7 +47,7 @@
 
 #define KEYBOARD_HEARTBEAT		3600000
 #define VENDOR_ID_LAB126		0x1949
-#define DEVICE_ID_LAB126_abc123_KB	0x042b
+#define DEVICE_ID_LAB126_SANIDINE_KB	0x042b
 #if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
 #define KEYBOARD_METRICS_BUFF_SIZE 512
 static char g_m_buf_kb[KEYBOARD_METRICS_BUFF_SIZE];
@@ -445,7 +445,7 @@ static void pogo_extcon_work(struct pogo_extcon_info *info)
 				"%s:%s:100:%s,%s,%s,%s,KeyboardVid=%d;IN,KeyboardPid=%d;IN,KeyboardSessionDuration=%lu;IN:us-east-1",
 				METRICS_KEYBOARD_GROUP_ID, METRICS_KEYBOARD_SCHEMA_ID, PREDEFINED_ESSENTIAL_KEY,
 				PREDEFINED_DEVICE_ID_KEY, PREDEFINED_CUSTOMER_ID_KEY, PREDEFINED_MODEL_KEY,
-				VENDOR_ID_LAB126, DEVICE_ID_LAB126_abc123_KB, elapsed_s);
+				VENDOR_ID_LAB126, DEVICE_ID_LAB126_SANIDINE_KB, elapsed_s);
 #endif
 			pr_info("%s: session duration=%lu\n", __func__, elapsed_s);
 			cancel_delayed_work(&info->heartbeat_work);
@@ -508,7 +508,7 @@ static void pogo_extcon_heartbeat_work(struct work_struct *work)
 				"%s:%s:100:%s,%s,%s,%s,KeyboardVid=%d;IN,KeyboardPid=%d;IN,KeyboardHeartbeat=1;IN:us-east-1",
 				METRICS_KEYBOARD_GROUP_ID, METRICS_KEYBOARD_SCHEMA_ID, PREDEFINED_ESSENTIAL_KEY,
 				PREDEFINED_DEVICE_ID_KEY, PREDEFINED_CUSTOMER_ID_KEY, PREDEFINED_MODEL_KEY,
-				VENDOR_ID_LAB126, DEVICE_ID_LAB126_abc123_KB);
+				VENDOR_ID_LAB126, DEVICE_ID_LAB126_SANIDINE_KB);
 #endif
 	pr_info("%s\n", __func__);
 	queue_delayed_work(system_freezable_wq, &info->heartbeat_work,
@@ -773,7 +773,7 @@ static int pogo_extcon_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 		goto err_input_dev;
 	}
-	input_dev_tlm->name = "abc123 Tablet Mode Switcher";
+	input_dev_tlm->name = "Sanidine Tablet Mode Switcher";
 	input_set_capability(input_dev_tlm, EV_SW, SW_TABLET_MODE);
 	ret = input_register_device(input_dev_tlm);
 	if (ret)

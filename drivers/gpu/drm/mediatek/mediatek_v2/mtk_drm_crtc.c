@@ -5627,11 +5627,12 @@ static uint32_t mtk_crtc_first_ovl_status_check(struct mtk_drm_crtc *mtk_crtc)
 	uint32_t enable = 1;
 
 	ddp_first_comp = mtk_crtc_get_comp(&(mtk_crtc->base), DDP_FIRST_PATH, 0);
-	DDPMSG("ddp_first_comp =%d\n", ddp_first_comp->id);
-	if (ddp_first_comp->id == DDP_COMPONENT_OVL0)
-		mtk_ddp_comp_io_cmd(ddp_first_comp, cmdq_handle,
+	if (ddp_first_comp) {
+		DDPMSG("ddp_first_comp =%d\n", ddp_first_comp->id);
+		if (ddp_first_comp->id == DDP_COMPONENT_OVL0)
+			mtk_ddp_comp_io_cmd(ddp_first_comp, cmdq_handle,
 				CHECK_LK_LOGO_STATUS, &enable);
-
+	}
 	return enable;
 
 }

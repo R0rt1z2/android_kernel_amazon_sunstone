@@ -13,7 +13,7 @@
 config I2C_HID_OF_NVT_TS
 	tristate "Driver for Novatek hid-i2c based devices on OF systems"
 	default n
-	depends on I2C_HID && INPUT && OF
+	depends on I2C_HID && INPUT && OF && STYLUS_BATTERY_ALGO
 	help
 	  Say Y here if you use NVT touchscreen IC which supports i2c-hid
 	  protocol. This driver supports Open Firmware (Device Tree)-based

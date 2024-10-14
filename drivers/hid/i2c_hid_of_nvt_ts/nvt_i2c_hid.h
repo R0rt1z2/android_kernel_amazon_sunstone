@@ -31,6 +31,10 @@
 #include "nvt_i2c_hid_mem_map.h"
 #include "nvt_i2c_hid_flash_info.h"
 
+#if IS_ENABLED(CONFIG_STYLUS_BATTERY_ALGO)
+#include "stylus_battery_algo.h"
+#endif
+
 // Do NOT turn this on in official release driver
 #define NO_PEN_SELFTEST 0
 #define CHECK_DATA_CHECKSUM 1
@@ -51,28 +55,24 @@
 
 #define PEN_FLAG_INDEX 2
 #define PEN_SERIAL_INDEX 38
-#define PEN_INVALID_SERIAL 0xFFFFFFFF
+#define PEN_INVALID_SERIAL 0
 #define PEN_DISCONNECT_MAX_TIME (10*60*1000)
 #define PEN_TIMESTAMP_SUPPORT 1
 #define PEN_ID 4
 #define PEN_MAX_DELTA 65535
 #define MAX_TIMESTAMP_INTERVAL 1000000
 
-/* stylus uevent size */
-#define ENV_SIZE 32
-/* Time 100ms by counting the number of data frames. */
-#define PEN_FRAME_COUNT 25
+/* reach SAMPLE_FREQ=10 in different touch modules. 240/10=24. */
+#define PEN_FRAME_COUNT 24
 
 /* stylus GID4 */
 #define PEN_VENDOR_USAGE_1_L 57
 #define PEN_VENDOR_USAGE_1_H 58
 /* stylus battery strength */
 #define PEN_BATTERY_STRENGTH 37
-/* stylus battery capacity jitter parameter, BATTERY_CAPACITY_JITTER_BUF: 0~100 */
-#define BATTERY_CAPACITY_JITTER_BUF 20
-#define STYLUS_BATTERY_CAPACITY_JITTER_BUF(X)                                  \
-	(X * (100 + BATTERY_CAPACITY_JITTER_BUF) / 100)
-#define STYLUS_VENDOR_USAGE_1P 0x132
+/* stylus fw version */
+#define NVT_HID_PEN_FW_VERSION_L 48
+#define NVT_HID_PEN_FW_VERSION_H 49
 
 #define DRIVER_ESD_PROTECT 1
 #define NVT_TOUCH_ESD_CHECK_PERIOD 2000
@@ -109,13 +109,6 @@
 enum {
 	PACKET_NORMAL,
 	PACKET_RECOVERY,
-};
-
-struct stylus_info {
-	char stylus_vendor[ENV_SIZE];
-	char stylus_vendor_id[ENV_SIZE];
-	char stylus_capacity[ENV_SIZE];
-	char stylus_status[ENV_SIZE];
 };
 
 struct nvt_ts_data {
@@ -158,14 +151,6 @@ struct nvt_ts_data {
 	uint8_t idx;
 	uint32_t pen_serial;
 	ktime_t pen_touch_time;
-
-	/* stylus device number */
-	dev_t stylus_dev_num;
-	struct device *stylus_dev;
-	struct class *stylus_class;
-	/* stylus uevent */
-	struct stylus_info stylus_uevent;
-	uint32_t stylus_frame_num;
 };
 
 typedef struct gcm_transfer {
@@ -201,7 +186,6 @@ typedef enum {
 //---extern structures---
 extern struct nvt_ts_data *ts;
 extern struct i2c_client *hid_i2c_client;
-extern bool gesture_switch;
 extern uint32_t set_f_pkt[GET_SET_F_PKT_LENGTH];
 extern uint32_t get_f_pkt[GET_SET_F_PKT_LENGTH];
 extern uint8_t prefix_pkt[PREFIX_PKT_LENGTH];
@@ -241,7 +225,6 @@ extern void nt36523b_share_tp_resetpin_control(int value);
 extern int nvt_fwupg_init(struct nvt_ts_data  *ts_data);
 extern void nvt_fwupg_deinit(struct nvt_ts_data  *ts_data);
 extern void nvt_fwupg_work(struct work_struct *work);
-extern int nvt_stylus_uevent(const u8 *raw_data, bool new_pen);
 #if DRIVER_ESD_PROTECT
 extern int nvt_esd_protect_init(struct nvt_ts_data  *ts_data);
 extern void nvt_esd_protect_deinit(struct nvt_ts_data  *ts_data);

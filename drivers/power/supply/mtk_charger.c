@@ -963,6 +963,11 @@ static int get_use_aging_zcv(void)
 		}
 	}
 
+	if (gauge->gm == NULL) {
+		chr_err("[%s]gauge's battery is NULL\n", __func__);
+		return 0; /* use default ZCV table 0 */
+	}
+
 	return gauge->gm->use_aging_zcv;
 }
 #endif
@@ -3932,6 +3937,10 @@ int psy_charger_set_property(struct power_supply *psy,
 	chr_err("%s: prop:%d %d\n", __func__, psp, val->intval);
 
 	info = (struct mtk_charger *)power_supply_get_drvdata(psy);
+	if (IS_ERR_OR_NULL(info)) {
+		chr_err("%s get info fail\n", __func__);
+		return -EINVAL;
+	}
 
 	if (info->psy1 != NULL &&
 		info->psy1 == psy)

@@ -249,7 +249,15 @@ int platform_load_apusys_rv(struct mtk_apu *apu, struct platform_device *pdev)
 			goto err_apusys_rv_get_buf_sz;
 		}
 		sec_mem_addr_pa = r.start;
+		if (IS_ERR_OR_NULL((void *)sec_mem_addr_pa)) {
+			pr_info("sec_mem_addr_pa is invalid\n");
+			goto err_apusys_rv_get_buf_sz;
+		}
 		sec_mem_addr_va = memremap(r.start, resource_size(&r), MEMREMAP_WB);
+		if (IS_ERR_OR_NULL(sec_mem_addr_va)) {
+			pr_info("sec_mem_addr_va is invalid\n");
+			goto err_apusys_rv_get_buf_sz;
+		}
 		sec_mem_size = resource_size(&r);
 		pr_info("Allocated reserved memory, vaddr: 0x%llx, paddr: 0x%llx, size:0x%lx\n",
 			(u64)sec_mem_addr_va, sec_mem_addr_pa, sec_mem_size);

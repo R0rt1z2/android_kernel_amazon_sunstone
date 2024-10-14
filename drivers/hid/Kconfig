@@ -93,10 +93,10 @@ menu "Special HID drivers"
 	depends on HID
 
 config HID_SANIDINE
-    tristate "sanidine USB(Pogo) Keyboard"
+    tristate "Sanidine USB(Pogo) Keyboard"
     depends on USB_HID
     help
-      Support for sanidine USB(Pogo) Keyboard
+      Support for Sanidine USB(Pogo) Keyboard
 
       Say Y here if you want to enable support for Kawartha KB
 
@@ -1226,5 +1226,7 @@ source "drivers/hid/ILITEK_HID_over_I2c/Kconfig"
 source "drivers/hid/i2c_hid_of_nvt_ts/Kconfig"
 
 source "drivers/hid/hid-focal/Kconfig"
+
+source "drivers/hid/stylus/Kconfig"
 
 endmenu

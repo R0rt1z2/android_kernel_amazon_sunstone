@@ -80,6 +80,8 @@ static int srclken_rc_dts_subsys_callback_init(struct device_node *node,
 	}
 
 	for (i = 0; i < clk_buf_get_xo_num(); i++) {
+		if (!clk_buf_get_xo_name(i))
+			continue;
 		if (!strcmp(str, clk_buf_get_xo_name(i))) {
 			__srclken_rc_xo_buf_callback_init(&subsys->xo_buf_ctl);
 			clk_buf_register_xo_ctl_op(str, &subsys->xo_buf_ctl);

@@ -55,6 +55,15 @@
 
 #define NVT_TOUCH_WKG_REPORT_PERIOD 600
 
+#define NVT_TOUCH_GESTURE_DISABLE 0
+#define NVT_TOUCH_GESTURE_ENABLE 1
+#define NVT_TOUCH_GESTURE_SWITCH_SUCCESS 0
+#define NVT_TOUCH_GESTURE_SWITCH_ON_FAIL 1
+#define NVT_TOUCH_GESTURE_SWITCH_OFF_FAIL 2
+
+#define IRQ_DISABLE 0
+#define IRQ_ENABLE 1
+
 struct i2c_client *hid_i2c_client = NULL;
 struct device *hid_i2c_dev;
 int32_t reset_gpio;
@@ -63,7 +72,10 @@ uint32_t set_f_pkt[GET_SET_F_PKT_LENGTH];
 uint32_t get_f_pkt[GET_SET_F_PKT_LENGTH];
 uint8_t prefix_pkt[PREFIX_PKT_LENGTH] = { 0x00, 0x00, 0x3B, 0x00, 0x00 };
 uint32_t wakeup_id;
-bool gesture_switch = false;
+atomic_t nvt_irq_stat;
+static DEFINE_SPINLOCK(nvt_irq_spin);
+static int gesture_switch = NVT_TOUCH_GESTURE_SWITCH_SUCCESS;
+static bool gesture_mode = false;
 static unsigned long gesture_timer;
 struct input_dev *wkg_input_dev;
 int32_t probe_result;
@@ -392,12 +404,15 @@ static int32_t nvt_ts_data_checksum(uint8_t *buf, uint8_t length)
 static void i2c_hid_get_input(struct i2c_hid *ihid)
 {
 	int ret = 0;
-	bool new_pen = false;
-	u32 ret_size;
+	u32 ret_size = 0;
 	uint32_t pen_serial = PEN_INVALID_SERIAL;
 	int size = le16_to_cpu(ihid->hdesc.wMaxInputLength);
 #if PEN_TIMESTAMP_SUPPORT
 	unsigned long jdelta = jiffies_to_usecs(jiffies - pen_jiffies);
+#endif
+#if IS_ENABLED(CONFIG_STYLUS_BATTERY_ALGO)
+	static u32 stylus_frame_num = 0;
+	stylus_packet_info_t stylus_packet_info = { 0 };
 #endif
 
 	if (size > ihid->bufsize)
@@ -454,34 +469,48 @@ static void i2c_hid_get_input(struct i2c_hid *ihid)
 
 		if (ihid->inbuf[PEN_FLAG_INDEX] == PEN_ID) {
 			memcpy(&pen_serial, ihid->inbuf + PEN_SERIAL_INDEX, sizeof(pen_serial));
-			if (pen_serial) {
-				ts->pen_touch_time = ktime_get();
+			if (pen_serial != PEN_INVALID_SERIAL) {
+				ts->pen_touch_time = ktime_get_boottime();
 
 				if (ts->pen_serial != pen_serial) {
 					NVT_LOG(
-						"stylus_power %d, stylus_vid 0x%x, old_stylus_id 0x%x, stylus_id 0x%x",
+						"stylus_power %d, stylus_vid 0x%x, old_stylus_id 0x%x, stylus_id 0x%x\n",
 						ihid->inbuf[PEN_BATTERY_STRENGTH],
 						(ihid->inbuf[PEN_VENDOR_USAGE_1_H] << 8) |
 						ihid->inbuf[PEN_VENDOR_USAGE_1_L],
 						ts->pen_serial, pen_serial);
 					ts->pen_serial = pen_serial;
-					ts->stylus_frame_num = 0;
-					new_pen = true;
+#if IS_ENABLED(CONFIG_STYLUS_BATTERY_ALGO)
+					stylus_frame_num = 0;
+#endif
 				}
 
 				NVT_DEBUG_LOG(
-					"stylus_battery_capacity %d, stylus_oem_vendor_id 0x%x, pen_serial 0x%x",
+					"stylus_battery_capacity %d, stylus_oem_vendor_id 0x%x, pen_serial 0x%x\n",
 					ihid->inbuf[PEN_BATTERY_STRENGTH],
 					(ihid->inbuf[PEN_VENDOR_USAGE_1_H] << 8) |
 					ihid->inbuf[PEN_VENDOR_USAGE_1_L],
 					ts->pen_serial);
 
-				if ((ts->stylus_frame_num++ % PEN_FRAME_COUNT) == 0)
-					nvt_stylus_uevent(ihid->inbuf, new_pen);
+#if IS_ENABLED(CONFIG_STYLUS_BATTERY_ALGO)
+				if ((++stylus_frame_num % PEN_FRAME_COUNT) == 0) {
+					/* get stylus capacity、stylus fw version and oem_vendor_id*/
+					stylus_packet_info.pen_id = ts->pen_serial;
+					stylus_packet_info.vendor_id =
+						ihid->inbuf[PEN_VENDOR_USAGE_1_H] << 8 | ihid->inbuf[PEN_VENDOR_USAGE_1_L],
+					stylus_packet_info.fw_version =
+						ihid->inbuf[NVT_HID_PEN_FW_VERSION_H] << 8 |
+						ihid->inbuf[NVT_HID_PEN_FW_VERSION_L];
+					stylus_packet_info.capacity = ihid->inbuf[PEN_BATTERY_STRENGTH];
+					stylus_packet_info.time = ktime_to_ms(ts->pen_touch_time);
+					stylus_info_packet(stylus_packet_info);
+					stylus_info_process();
+				}
+#endif
 			}
 		}
 
-		if (wakeup_id && gesture_switch && (wakeup_id == ihid->inbuf[2]) &&
+		if (wakeup_id && gesture_mode && (wakeup_id == ihid->inbuf[2]) &&
 		    jiffies_to_msecs(jiffies - gesture_timer) >
 			    NVT_TOUCH_WKG_REPORT_PERIOD) {
 			pm_wakeup_event(&wkg_input_dev->dev, 5000);
@@ -1049,7 +1078,7 @@ static ssize_t gesture_wakeup_show(struct device *dev, struct device_attribute *
 {
 	int32_t ret = 0;
 
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", gesture_switch);
+	ret = snprintf(buf, PAGE_SIZE, "%d\n", gesture_mode);
 	return ret;
 }
 
@@ -1062,23 +1091,25 @@ static ssize_t gesture_wakeup_store(struct device *dev, struct device_attribute 
 		return -EINVAL;
 
 	switch (mode) {
-	case 0:
+	case NVT_TOUCH_GESTURE_DISABLE:
 		NVT_LOG("Disable gesture Mode\n");
 		if (i2c_hid_command(hid_i2c_client, &hid_wkg_off_cmd, NULL, 0)) {
 			NVT_ERR("failed to disable WKG Mode.\n");
+			gesture_switch = NVT_TOUCH_GESTURE_SWITCH_OFF_FAIL;
 		} else {
-			gesture_switch = false;
+			gesture_mode = false;
 			wake_status = disable_irq_wake(hid_i2c_client->irq);
 			if (wake_status)
 				NVT_ERR("Failed to disable irq wake\n");
 			panel_gesture_mode_set_by_nt36523b(false);
 		}
 		break;
-	case 1:
+	case NVT_TOUCH_GESTURE_ENABLE:
 		if (i2c_hid_command(hid_i2c_client, &hid_wkg_on_cmd, NULL, 0)) {
 			NVT_ERR("failed to enable WKG Mode.\n");
+			gesture_switch = NVT_TOUCH_GESTURE_SWITCH_ON_FAIL;
 		} else {
-			gesture_switch = true;
+			gesture_mode = true;
 			wake_status = enable_irq_wake(hid_i2c_client->irq);
 			if (wake_status)
 				NVT_ERR("Failed to enable irq wake\n");
@@ -1097,7 +1128,7 @@ static ssize_t tp_pen_serial_show(struct device *dev, struct device_attribute *a
 {
 	int32_t len = 0;
 	int32_t pen_disconnect_diff = 0;
-	ktime_t pen_touch_disconnect = ktime_get();
+	ktime_t pen_touch_disconnect = ktime_get_boottime();
 
 	pen_disconnect_diff = ktime_to_ms(pen_touch_disconnect) -
 			ktime_to_ms(ts->pen_touch_time);
@@ -1138,163 +1169,6 @@ static const struct attribute_group nvt_api_attribute_group = {
 	.attrs = nvt_api_attrs,
 };
 
-static int nvt_stylus_report_uevent(struct device *dev,
-				    struct kobj_uevent_env *env)
-{
-	int ret = 0;
-
-	if (!ts) {
-		NVT_ERR("%s: ts is NULL\n", __func__);
-		return -EINVAL;
-	}
-
-	ret = add_uevent_var(env, "STYLUS_LEVEL=%s",
-			     ts->stylus_uevent.stylus_capacity);
-	ret = add_uevent_var(env, "STYLUS_VENDOR=%s",
-			     ts->stylus_uevent.stylus_vendor);
-	ret = add_uevent_var(env, "STYLUS_VENDOR_ID=%s",
-			     ts->stylus_uevent.stylus_vendor_id);
-	ret = add_uevent_var(env, "STYLUS_STATUS=%s",
-			     ts->stylus_uevent.stylus_status);
-
-	return ret;
-}
-
-static u32 stylus_battery_capacity_jitter_filter(
-				     u32 stylus_battery_capacity,
-				     bool *stylus_battery_capacity_change,
-				     bool new_pen)
-{
-	static u32 last_stylus_battery_capacity;
-	static u32 last_stylus_battery_capacity_buf;
-
-	if (stylus_battery_capacity_change == NULL) {
-		NVT_ERR("%s: stylus_battery_capacity_change is NULL\n",
-			__func__);
-		return -EINVAL;
-	}
-
-	/* new stylus,need to set new jitter parameters */
-	if (new_pen) {
-		last_stylus_battery_capacity = 0;
-		last_stylus_battery_capacity_buf = 0;
-	}
-
-	/* algorithm for eliminating power jitter */
-	if (stylus_battery_capacity > last_stylus_battery_capacity &&
-	    stylus_battery_capacity < last_stylus_battery_capacity_buf) {
-		stylus_battery_capacity = last_stylus_battery_capacity;
-	} else if (stylus_battery_capacity != last_stylus_battery_capacity) {
-		if (printk_ratelimit())
-			NVT_LOG(
-				"stylus battery power: %d -> %d\n",
-				last_stylus_battery_capacity,
-				stylus_battery_capacity);
-		last_stylus_battery_capacity = stylus_battery_capacity;
-		last_stylus_battery_capacity_buf =
-			STYLUS_BATTERY_CAPACITY_JITTER_BUF(
-			last_stylus_battery_capacity);
-		*stylus_battery_capacity_change = true;
-	}
-
-	return stylus_battery_capacity;
-}
-
-int nvt_stylus_uevent(const u8 *raw_data, bool new_pen)
-{
-	u32 stylus_battery_capacity = 0, new_stylus_battery_capacity = 0;
-	bool stylus_battery_capacity_change = false;
-	u16 stylus_oem_vendor_id = 0;
-
-	if (!ts || !ts->stylus_dev || !raw_data) {
-		NVT_ERR("%s: Nova device or stylus device or raw_data is NULL\n",
-			__func__);
-		return -EINVAL;
-	}
-
-	/* get oem_vendor_id */
-	stylus_oem_vendor_id = (raw_data[PEN_VENDOR_USAGE_1_H] << 8) |
-			       raw_data[PEN_VENDOR_USAGE_1_L];
-	/* only handles 1p pens */
-	if (stylus_oem_vendor_id != STYLUS_VENDOR_USAGE_1P) {
-		memset(&ts->stylus_uevent, 0, sizeof(ts->stylus_uevent));
-		return -EINVAL;
-	}
-
-	/* get stylus_battery_capacity */
-	stylus_battery_capacity = raw_data[PEN_BATTERY_STRENGTH];
-	/* stylus battery capacity filter outliers */
-	if ((stylus_battery_capacity <= 0) || (stylus_battery_capacity > 100))
-		return -EINVAL;
-	new_stylus_battery_capacity = stylus_battery_capacity_jitter_filter(
-		stylus_battery_capacity, &stylus_battery_capacity_change,
-		new_pen);
-
-	snprintf(ts->stylus_uevent.stylus_vendor, ENV_SIZE, "%s", "amzn");
-	snprintf(ts->stylus_uevent.stylus_vendor_id, ENV_SIZE, "0x%x",
-		 stylus_oem_vendor_id);
-	snprintf(ts->stylus_uevent.stylus_capacity, ENV_SIZE, "%d",
-		 new_stylus_battery_capacity);
-
-	if ((new_stylus_battery_capacity <= 40) &&
-	    (new_stylus_battery_capacity > 0))
-		snprintf(ts->stylus_uevent.stylus_status, ENV_SIZE, "%s",
-			 "LOW ");
-	else
-		snprintf(ts->stylus_uevent.stylus_status, ENV_SIZE, "%s",
-			 "NORMAL ");
-
-	if (stylus_battery_capacity_change || new_pen)
-		kobject_uevent(&ts->stylus_dev->kobj, KOBJ_CHANGE);
-
-	return 0;
-}
-
-static int nvt_stylus_uevent_init(void)
-{
-	int ret = 0;
-
-	ret = alloc_chrdev_region(&ts->stylus_dev_num, 0, 1, "stylus_dev_num");
-	if (ret < 0) {
-		NVT_ERR("stylus dev num chrdev region error!\n");
-		return ret;
-	}
-
-	ts->stylus_class = class_create(THIS_MODULE, "stylus_uevent");
-	if (IS_ERR(ts->stylus_class)) {
-		NVT_ERR("create demo class err!\n");
-		ret = -EINVAL;
-		goto class_creat_fail;
-	}
-
-	ts->stylus_dev = device_create(ts->stylus_class, NULL,
-				       ts->stylus_dev_num, NULL, "stylus_dev");
-	if (ts->stylus_dev == NULL) {
-		NVT_ERR("device_create error\n");
-		ret = -EINVAL;
-		goto dev_creat_fail;
-	}
-	ts->stylus_class->dev_uevent = nvt_stylus_report_uevent;
-
-	return ret;
-dev_creat_fail:
-	class_destroy(ts->stylus_class);
-	ts->stylus_class = NULL;
-class_creat_fail:
-	unregister_chrdev_region(ts->stylus_dev_num, 1);
-	return ret;
-}
-
-void nvt_stylus_uevent_remove(void)
-{
-	if (ts->stylus_dev_num >= 0)
-		unregister_chrdev_region(ts->stylus_dev_num, 1);
-	if (ts->stylus_dev)
-		device_destroy(ts->stylus_class, ts->stylus_dev_num);
-	if (ts->stylus_class)
-		class_destroy(ts->stylus_class);
-}
-
 static int nvt_i2c_hid_driver_load(void)
 {
 	int ret = 0;
@@ -1326,8 +1200,6 @@ static int nvt_i2c_hid_driver_load(void)
 	}
 	ts->touch_ready = 0;
 	ts->pen_serial = PEN_INVALID_SERIAL;
-	ts->stylus_frame_num = 0;
-	memset(&ts->stylus_uevent, 0, sizeof(ts->stylus_uevent));
 
 	if (!ts->xbuf) {
 		ts->xbuf = kzalloc(NVT_XBUF_LEN, GFP_KERNEL);
@@ -1462,6 +1334,7 @@ static int nvt_i2c_hid_driver_load(void)
 		goto err_irq;
 	}
 
+	atomic_set(&nvt_irq_stat, IRQ_ENABLE);
 	ihid->hid = hid;
 
 	hid->driver_data = hid_i2c_client;
@@ -1524,10 +1397,6 @@ static int nvt_i2c_hid_driver_load(void)
 			input_set_capability(wkg_input_dev, EV_KEY, KEY_POWER);
 
 			client = ts->client;
-
-			ret = nvt_stylus_uevent_init();
-			if (ret < 0)
-				NVT_ERR("stylus uevent init failed %d.\n", ret);
 
 			touchscreen_link = kobject_create_and_add("touchscreen", NULL);
 			if (touchscreen_link != NULL) {
@@ -1672,8 +1541,6 @@ static int nvt_i2c_hid_remove(struct i2c_client *client)
 
 	free_irq(client->irq, ihid);
 
-	nvt_stylus_uevent_remove();
-
 	if (ihid->bufsize)
 		i2c_hid_free_buffers(ihid);
 
@@ -1684,6 +1551,40 @@ static int nvt_i2c_hid_remove(struct i2c_client *client)
 	mutex_unlock(&probe_lock);
 
 	return 0;
+}
+
+void nvt_hid_irq_enable(void)
+{
+	unsigned long flag = 0;
+
+	spin_lock_irqsave(&nvt_irq_spin, flag);
+
+	if (atomic_read(&nvt_irq_stat) == IRQ_ENABLE) {
+		goto out;
+	} else {
+		enable_irq(ts->client->irq);
+		atomic_set(&nvt_irq_stat, IRQ_ENABLE);
+	}
+
+out:
+	spin_unlock_irqrestore(&nvt_irq_spin, flag);
+}
+
+void nvt_hid_irq_disable(void)
+{
+	unsigned long flag = 0;
+
+	spin_lock_irqsave(&nvt_irq_spin, flag);
+
+	if (atomic_read(&nvt_irq_stat) == IRQ_DISABLE) {
+		goto out;
+	} else {
+		disable_irq_nosync(ts->client->irq);
+		atomic_set(&nvt_irq_stat, IRQ_DISABLE);
+	}
+
+out:
+	spin_unlock_irqrestore(&nvt_irq_spin, flag);
 }
 
 static int32_t nvt_ts_resume(struct device *dev)
@@ -1700,8 +1601,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 	}
 #endif
 
-	if (!gesture_switch)
-		enable_irq(ts->client->irq);
+	nvt_hid_irq_enable();
 	ts->touch_is_awake = true;
 
 	NVT_ERR("nvt ts resume.\n");
@@ -1710,6 +1610,8 @@ static int32_t nvt_ts_resume(struct device *dev)
 
 static int32_t nvt_ts_suspend(struct device *dev)
 {
+	int wake_status = 0;
+
 	if (!ts->touch_is_awake) {
 		NVT_LOG("Touch is already suspend\n");
 		return 0;
@@ -1719,8 +1621,40 @@ static int32_t nvt_ts_suspend(struct device *dev)
 	if (ts->nvt_esd_wq)
 		cancel_delayed_work_sync(&ts->nvt_esd_work);
 #endif
-	if (!gesture_switch)
-		disable_irq(ts->client->irq);
+
+	switch (gesture_switch) {
+	case NVT_TOUCH_GESTURE_SWITCH_ON_FAIL:
+		NVT_LOG("Enable gesture Mode\n");
+		if (i2c_hid_command(hid_i2c_client, &hid_wkg_on_cmd, NULL, 0)) {
+			NVT_ERR("failed to enable WKG Mode.\n");
+		} else {
+			gesture_mode = true;
+			wake_status = enable_irq_wake(hid_i2c_client->irq);
+			if (wake_status)
+				NVT_ERR("Failed to enable irq wake\n");
+			panel_gesture_mode_set_by_nt36523b(true);
+			gesture_switch = NVT_TOUCH_GESTURE_SWITCH_SUCCESS;
+		}
+		break;
+	case NVT_TOUCH_GESTURE_SWITCH_OFF_FAIL:
+		NVT_LOG("Disable gesture Mode\n");
+		if (i2c_hid_command(hid_i2c_client, &hid_wkg_off_cmd, NULL, 0)) {
+			NVT_ERR("failed to disable WKG Mode.\n");
+		} else {
+			gesture_mode = false;
+			wake_status = disable_irq_wake(hid_i2c_client->irq);
+			if (wake_status)
+				NVT_ERR("Failed to disable irq wake\n");
+			panel_gesture_mode_set_by_nt36523b(false);
+			gesture_switch = NVT_TOUCH_GESTURE_SWITCH_SUCCESS;
+		}
+		break;
+	default:
+		break;
+	}
+
+	if (!gesture_mode)
+		nvt_hid_irq_disable();
 	ts->touch_is_awake = false;
 
 	NVT_LOG("nvt ts suspend.\n");

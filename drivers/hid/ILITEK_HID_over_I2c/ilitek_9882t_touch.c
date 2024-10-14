@@ -2541,9 +2541,12 @@ int ili_hid_read_knuckle_roi_data(void)
 
 void ili_hid_report(u8 *raw_data, int size, struct hid_field *field)
 {
-	bool new_pen = false;
 	u32 timestamp = 0;
 	uint32_t pen_serial = INVALID_PEN_SERIAL;
+#if IS_ENABLED(CONFIG_STYLUS_BATTERY_ALGO)
+	static u32 stylus_frame_num = 0;
+	stylus_packet_info_t stylus_packet_info = { 0 };
+#endif
 
 	ili_hid_dump_data(raw_data, 8, 32, 0, "raw_data");
 
@@ -2567,30 +2570,44 @@ void ili_hid_report(u8 *raw_data, int size, struct hid_field *field)
 				    (raw_data[ILITEK_HID_PEN_SERIAL_3] << 16) |
 				    (raw_data[ILITEK_HID_PEN_SERIAL_2] << 8) |
 				    raw_data[ILITEK_HID_PEN_SERIAL_1];
-		if (pen_serial) {
-			ilits->pen_touch_time = ktime_get();
+		if (pen_serial != INVALID_PEN_SERIAL) {
+			ilits->pen_touch_time = ktime_get_boottime();
 
 			if (ilits->pen_serial != pen_serial) {
 				ILI_INFO(
-					"stylus_power %d, stylus_vid 0x%x, old_stylus_id 0x%x, stylus_id 0x%x",
+					"stylus_power %d, stylus_vid 0x%x, old_stylus_id 0x%x, stylus_id 0x%x\n",
 					raw_data[I2C_HID_STYLUS_BATTERY_STRENGTH],
 					(raw_data[ILITEK_HID_PEN_VENDOR_USAGE_1_H]
 					<< 8) | raw_data[ILITEK_HID_PEN_VENDOR_USAGE_1_L],
 					ilits->pen_serial, pen_serial);
 				ilits->pen_serial = pen_serial;
-				ilits->stylus_frame_num = 0;
-				new_pen = true;
+#if IS_ENABLED(CONFIG_STYLUS_BATTERY_ALGO)
+				stylus_frame_num = 0;
+#endif
 			}
 
 			ILI_DEBUG_INFO(
-				"stylus_battery_capacity %d, stylus_oem_vendor_id 0x%x, pen_serial 0x%x",
+				"stylus_battery_capacity %d, stylus_oem_vendor_id 0x%x, pen_serial 0x%x\n",
 				raw_data[I2C_HID_STYLUS_BATTERY_STRENGTH],
 				(raw_data[ILITEK_HID_PEN_VENDOR_USAGE_1_H]
 				<< 8) | raw_data[ILITEK_HID_PEN_VENDOR_USAGE_1_L],
 				ilits->pen_serial);
 
-			if ((ilits->stylus_frame_num++ % PEN_FRAME_COUNT) == 0)
-				ilitek_stylus_uevent(raw_data, new_pen);
+#if IS_ENABLED(CONFIG_STYLUS_BATTERY_ALGO)
+			if ((++stylus_frame_num % PEN_FRAME_COUNT) == 0) {
+				/* get stylus capacity、stylus fw version and oem_vendor_id*/
+				stylus_packet_info.pen_id = ilits->pen_serial;
+				stylus_packet_info.vendor_id =
+					raw_data[ILITEK_HID_PEN_VENDOR_USAGE_1_H] << 8 | raw_data[ILITEK_HID_PEN_VENDOR_USAGE_1_L];
+				stylus_packet_info.fw_version =
+					raw_data[ILITEK_HID_PEN_FW_VERSION_H] << 8 |
+					raw_data[ILITEK_HID_PEN_FW_VERSION_L];
+				stylus_packet_info.capacity = raw_data[I2C_HID_STYLUS_BATTERY_STRENGTH];
+				stylus_packet_info.time = ktime_to_ms(ilits->pen_touch_time);
+				stylus_info_packet(stylus_packet_info);
+				stylus_info_process();
+			}
+#endif
 		}
 		timestamp = (raw_data[I2C_HID_TIME_STAMP_H_IDX] << 8) | raw_data[I2C_HID_TIME_STAMP_L_IDX];
 		set_bit(MSC_TIMESTAMP, field->hidinput->input->mscbit);
