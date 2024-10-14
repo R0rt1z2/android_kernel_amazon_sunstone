@@ -31,12 +31,18 @@
 #define METRICS_STR_LEN 1024
 #define BTN_TOUCH_VALUE_DOWN 1
 #define BTN_DIGI_VALUE_DOWN 1
+#define BTN_DIGI_VALUE_UP 0
 #endif
 
 #if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
+#include <linux/time.h>
+#include <linux/rtc.h>
 #define INPUT_MINERVA_FMT "%s:%s:100:%s,%s,%s,%s,%s,%s,%s,key_power=%d;IN,key_volup=%d;IN,key_voldown=%d;IN,touch_tap=%d;IN,esd_recovery=0;IN:us-east-1"
-#define STYLUS_MINERVA_FMT "%s:%s:100:%s,%s,%s,%s,%s,%s,%s,UsageCounter=%d;IN:us-east-1"
-#define STYLUS_USE_INTERVAL_TIME (10*60*1000)
+#define STYLUS_MINERVA_FMT "%s:%s:100:%s,%s,%s,%s,%s,%s,%s,UsageCounter=%d;IN,sessionStartTime=%s;SY,sessionEndTime=%s;SY,sessionDuration=%s;SY:us-east-1"
+#define STYLUS_IDLE_TIME (30*1000)
+#define SESSION_TIME_LEN 64
+#define STYLUS_SESSION_ACTIVE 1
+#define STYLUS_SESSION_INACTIVE 0
 #endif
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
@@ -56,10 +62,42 @@ static atomic_t vol_up_counter = ATOMIC_INIT(0);
 static atomic_t vol_down_counter = ATOMIC_INIT(0);
 static atomic_t touch_tap_counter = ATOMIC_INIT(0);
 static atomic_t stylus_tap_counter = ATOMIC_INIT(0);
-static int32_t stylus_touch_difftime;
-static ktime_t stylus_touch_usetime;
-static ktime_t stylus_touch_notusedtime;
 struct delayed_work metrics_work;
+
+static int32_t stylus_session_status = STYLUS_SESSION_INACTIVE;
+static char sessionStartTime[SESSION_TIME_LEN];
+static char sessionEndTime[SESSION_TIME_LEN];
+static char sesssionDuartion[SESSION_TIME_LEN];
+static char minerva_buf[METRICS_STR_LEN];
+static struct rtc_time start_time, end_time;
+static struct timespec64 stylus_start_time, stylus_end_time, stylus_run_time;
+static struct delayed_work stylus_metrics_work;
+static struct mutex stylus_metrics_lock;
+
+static void metrics_stylus_func(struct work_struct *work)
+{
+	char session_StartTime[SESSION_TIME_LEN] = { 0 };
+	char session_EndTime[SESSION_TIME_LEN] = { 0 };
+	char sesssion_Duartion[SESSION_TIME_LEN] = { 0 };
+	const struct amazon_logger_ops *amazon_logger = amazon_logger_ops_get();
+
+	mutex_lock(&stylus_metrics_lock);
+	memcpy(session_StartTime, sessionStartTime, SESSION_TIME_LEN);
+	memcpy(session_EndTime, sessionEndTime, SESSION_TIME_LEN);
+	memcpy(sesssion_Duartion, sesssionDuartion, SESSION_TIME_LEN);
+	stylus_session_status = STYLUS_SESSION_INACTIVE;
+	mutex_unlock(&stylus_metrics_lock);
+
+	if (amazon_logger && amazon_logger->minerva_metrics_log) {
+		amazon_logger->minerva_metrics_log(minerva_buf, METRICS_STR_LEN, STYLUS_MINERVA_FMT,
+			METRICS_INPUT_GROUP_ID, METRICS_STYLUS_SCHEMA_ID, PREDEFINED_ESSENTIAL_KEY,
+			PREDEFINED_DEVICE_ID_KEY, PREDEFINED_CUSTOMER_ID_KEY, PREDEFINED_OS_KEY,
+			PREDEFINED_DEVICE_LANGUAGE_KEY, PREDEFINED_TZ_KEY, PREDEFINED_MODEL_KEY,
+			stylus_tap_counter, session_StartTime, session_EndTime, sesssion_Duartion);
+	}
+}
+
+static DECLARE_DELAYED_WORK(stylus_metrics_work, metrics_stylus_func);
 #endif
 
 /*
@@ -394,8 +432,50 @@ static void input_handle_event(struct input_dev *dev,
 {
 	int disposition = input_get_disposition(dev, type, code, &value);
 
-	if (disposition != INPUT_IGNORE_EVENT && type != EV_SYN)
+	if (disposition != INPUT_IGNORE_EVENT && type != EV_SYN) {
 		add_input_randomness(type, code, value);
+#if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
+		if (type == EV_KEY && (code == BTN_DIGI && value == BTN_DIGI_VALUE_DOWN)) {
+			atomic_set(&stylus_tap_counter, 1);
+			cancel_delayed_work(&stylus_metrics_work);
+
+			if (stylus_session_status == STYLUS_SESSION_INACTIVE) {
+				mutex_lock(&stylus_metrics_lock);
+				/* get session start time. */
+				ktime_get_real_ts64(&stylus_start_time);
+				rtc_time64_to_tm(stylus_start_time.tv_sec, &start_time);
+				snprintf(sessionStartTime, SESSION_TIME_LEN,
+					"%04d-%02d-%02d_%02d-%02d-%02d",
+					start_time.tm_year + 1900, start_time.tm_mon + 1,
+					start_time.tm_mday, start_time.tm_hour,
+					start_time.tm_min, start_time.tm_sec);
+				stylus_session_status = STYLUS_SESSION_ACTIVE;
+				mutex_unlock(&stylus_metrics_lock);
+			}
+		}
+
+		if (type == EV_KEY && (code == BTN_DIGI && value == BTN_DIGI_VALUE_UP)) {
+			mutex_lock(&stylus_metrics_lock);
+			/* get session end time. */
+			ktime_get_real_ts64(&stylus_end_time);
+			rtc_time64_to_tm(stylus_end_time.tv_sec, &end_time);
+			snprintf(sessionEndTime, SESSION_TIME_LEN,
+				"%04d-%02d-%02d_%02d-%02d-%02d",
+				end_time.tm_year + 1900, end_time.tm_mon + 1,
+				end_time.tm_mday, end_time.tm_hour,
+				end_time.tm_min, end_time.tm_sec);
+			/* get session duration */
+			stylus_run_time.tv_sec = stylus_end_time.tv_sec -
+				stylus_start_time.tv_sec;
+			snprintf(sesssionDuartion, SESSION_TIME_LEN,
+				"%d", stylus_run_time.tv_sec);
+			mutex_unlock(&stylus_metrics_lock);
+
+			schedule_delayed_work(&stylus_metrics_work,
+				msecs_to_jiffies(STYLUS_IDLE_TIME));
+		}
+#endif
+	}
 
 	if ((disposition & INPUT_PASS_TO_DEVICE) && dev->event)
 		dev->event(dev, type, code, value);
@@ -468,17 +548,6 @@ void input_event(struct input_dev *dev,
 #if IS_ENABLED(CONFIG_AMAZON_METRICS_LOG) || IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
 		if (type == EV_KEY && (code == BTN_TOUCH && value == BTN_TOUCH_VALUE_DOWN))
 			atomic_inc(&touch_tap_counter);
-
-		if (type == EV_KEY && (code == BTN_DIGI && value == BTN_DIGI_VALUE_DOWN)) {
-			stylus_touch_usetime = ktime_get();
-			stylus_touch_difftime = ktime_to_ms(stylus_touch_usetime) -
-					ktime_to_ms(stylus_touch_notusedtime);
-
-			if (stylus_touch_difftime > STYLUS_USE_INTERVAL_TIME) {
-				atomic_inc(&stylus_tap_counter);
-				stylus_touch_notusedtime = ktime_get();
-			}
-		}
 
 		if (type == EV_KEY && code == KEY_VOLUMEDOWN)
 			atomic_inc(&vol_down_counter);
@@ -2588,14 +2657,6 @@ static void metrics_count_work(struct work_struct *work)
 		memset(buf, 0, sizeof(buf));
 	}
 
-	if (amazon_logger && amazon_logger->minerva_metrics_log) {
-		amazon_logger->minerva_metrics_log(buf, METRICS_STR_LEN, STYLUS_MINERVA_FMT,
-			METRICS_INPUT_GROUP_ID, METRICS_STYLUS_SCHEMA_ID, PREDEFINED_ESSENTIAL_KEY,
-			PREDEFINED_DEVICE_ID_KEY, PREDEFINED_CUSTOMER_ID_KEY, PREDEFINED_OS_KEY,
-			PREDEFINED_DEVICE_LANGUAGE_KEY, PREDEFINED_TZ_KEY, PREDEFINED_MODEL_KEY,
-			atomic_xchg(&stylus_tap_counter, 0));
-	}
-
 	schedule_delayed_work(dw, 86400*HZ);
 }
 #endif
@@ -2622,6 +2683,7 @@ static int __init input_init(void)
 	}
 
 #if IS_ENABLED(CONFIG_AMAZON_METRICS_LOG) || IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
+	mutex_init(&stylus_metrics_lock);
 	INIT_DELAYED_WORK(&metrics_work, metrics_count_work);
 	schedule_delayed_work(&metrics_work, 0);
 #endif
@@ -2641,7 +2703,9 @@ static void __exit input_exit(void)
 	class_unregister(&input_class);
 
 #if IS_ENABLED(CONFIG_AMAZON_METRICS_LOG) || IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
+	mutex_destroy(&stylus_metrics_lock);
 	cancel_delayed_work(&metrics_work);
+	cancel_delayed_work(&stylus_metrics_work);
 #endif
 }
 

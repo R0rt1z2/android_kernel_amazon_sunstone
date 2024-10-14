@@ -31,9 +31,6 @@
 #include "mtk_disp_notify.h"
 #include "mtk_panel_ext.h"
 #endif
-#if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
-#include <linux/metricslog.h>
-#endif
 
 #define POGO_PIN_DEBOUNCE_MS    	20	/* ms */
 #define DETECT_DEFAULT_MS		500	/* ms */
@@ -48,14 +45,6 @@
 #define WORK_INTERVAL_IRQ		30000
 
 #define POGO_IRQ			"pogo-irq"
-
-#define KEYBOARD_HEARTBEAT		3600000
-#define VENDOR_ID_LAB126		0x1949
-#define DEVICE_ID_LAB126_abc123_KB	0x042b
-#if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
-#define KEYBOARD_METRICS_BUFF_SIZE 512
-static char g_m_buf_kb[KEYBOARD_METRICS_BUFF_SIZE];
-#endif
 
 enum detect_threshold {
 	THRESHOLD_L = 0,
@@ -88,7 +77,6 @@ struct pogo_extcon_info {
 	unsigned int current_interval;
 	unsigned int gpio_id_irq;
 	unsigned long debounce_jiffies;
-	unsigned long elapsed_s;
 	int irq;
 	int gpio_state;
 
@@ -98,10 +86,8 @@ struct pogo_extcon_info {
 	struct iio_channel *adc_ch;
 	struct switch_dev ld_switch;
 	struct wakeup_source wake_lock;
-	struct wakeup_source heartbeat_wake_lock;
 	struct delayed_work irq_work;
 	struct delayed_work routine_work;
-	struct delayed_work heartbeat_work;
 	struct mutex pogo_lock;
 	struct mutex routine_lock;
 	struct input_dev *input_dev_pwk;
@@ -122,8 +108,6 @@ struct pogo_extcon_info {
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
 	bool is_blank;
 #endif
-
-	ktime_t time_start;
 };
 
 static int pogo_extcon_pinctrl_parse_dt(struct pogo_extcon_info *info)
@@ -410,18 +394,6 @@ static void pogo_report_event(struct pogo_extcon_info *info, int event)
 	}
 }
 
-static void pogo_to_metrics(struct pogo_extcon_info *info)
-{
-#if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
-	minerva_metrics_log(g_m_buf_kb, KEYBOARD_METRICS_BUFF_SIZE,
-		"%s:%s:100:%s,%s,%s,%s,KeyboardVid=%d;IN,KeyboardPid=%d;IN,KeyboardSessionDuration=%lu;IN:us-east-1",
-		METRICS_KEYBOARD_GROUP_ID, METRICS_KEYBOARD_SCHEMA_ID, PREDEFINED_ESSENTIAL_KEY,
-		PREDEFINED_DEVICE_ID_KEY, PREDEFINED_CUSTOMER_ID_KEY, PREDEFINED_MODEL_KEY,
-		VENDOR_ID_LAB126, DEVICE_ID_LAB126_abc123_KB, info->elapsed_s);
-#endif
-	pr_info("%s: session duration=%lu\n", __func__, info->elapsed_s);
-}
-
 static void pogo_extcon_work(struct pogo_extcon_info *info)
 {
 	int event = TYPE_NOTHING;
@@ -441,8 +413,6 @@ static void pogo_extcon_work(struct pogo_extcon_info *info)
 		/* Other event -> Keyboard */
 		if (!info->force_dis_keyboard)
 			pogo_enable_otg_keyboard(info, true);
-		info->time_start = ktime_get_boottime();
-		queue_delayed_work(system_freezable_wq, &info->heartbeat_work, 0);
 	} else {
 		if (info->event == TYPE_KEYBOARD) {
 			/* Keyboard -> Other event */
@@ -450,9 +420,6 @@ static void pogo_extcon_work(struct pogo_extcon_info *info)
 			input_report_switch(info->input_dev_tlm,
 				SW_TABLET_MODE, false);
 			input_sync(info->input_dev_tlm);
-			info->elapsed_s = ktime_to_ms(ktime_sub(ktime_get_boottime(), info->time_start)) / 1000;
-			pogo_to_metrics(info);
-			cancel_delayed_work(&info->heartbeat_work);
 		}
 	}
 
@@ -534,8 +501,6 @@ static void pogo_extcon_irq_work(struct work_struct *work)
 			event = TYPE_KEYBOARD;
 			if (!info->force_dis_keyboard)
 				pogo_enable_otg_keyboard(info, true);
-			info->time_start = ktime_get_boottime();
-			queue_delayed_work(system_freezable_wq, &info->heartbeat_work, 0);
 		} else {
 			goto out;
 		}
@@ -548,9 +513,6 @@ static void pogo_extcon_irq_work(struct work_struct *work)
 				input_report_switch(info->input_dev_tlm,
 					SW_TABLET_MODE, false);
 				input_sync(info->input_dev_tlm);
-				info->elapsed_s = ktime_to_ms(ktime_sub(ktime_get_boottime(), info->time_start)) / 1000;
-				pogo_to_metrics(info);
-				cancel_delayed_work(&info->heartbeat_work);
 			}
 		} else {
 			goto out;
@@ -595,26 +557,6 @@ skip:
 		 msecs_to_jiffies(info->current_interval));
 
 	__pm_relax(&info->wake_lock);
-}
-
-static void pogo_extcon_heartbeat_work(struct work_struct *work)
-{
-	struct pogo_extcon_info *info =
-		 container_of(work, struct pogo_extcon_info, heartbeat_work.work);
-
-	__pm_stay_awake(&info->heartbeat_wake_lock);
-
-#if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
-	minerva_metrics_log(g_m_buf_kb, KEYBOARD_METRICS_BUFF_SIZE,
-		"%s:%s:100:%s,%s,%s,%s,KeyboardVid=%d;IN,KeyboardPid=%d;IN,KeyboardHeartbeat=1;IN:us-east-1",
-		METRICS_KEYBOARD_GROUP_ID, METRICS_KEYBOARD_SCHEMA_ID, PREDEFINED_ESSENTIAL_KEY,
-		PREDEFINED_DEVICE_ID_KEY, PREDEFINED_CUSTOMER_ID_KEY, PREDEFINED_MODEL_KEY,
-		VENDOR_ID_LAB126, DEVICE_ID_LAB126_abc123_KB);
-#endif
-	pr_info("%s\n", __func__);
-	queue_delayed_work(system_freezable_wq, &info->heartbeat_work,
-			 msecs_to_jiffies(KEYBOARD_HEARTBEAT));
-	__pm_relax(&info->heartbeat_wake_lock);
 }
 
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
@@ -771,22 +713,19 @@ static int pogo_extcon_probe(struct platform_device *pdev)
 	info->moisture_threshold_irq[THRESHOLD_L] 	= MOISTURE_THRESHOLD_IRQ_L;
 	info->moisture_threshold_irq[THRESHOLD_H] 	= MOISTURE_THRESHOLD_IRQ_H;
 	info->work_interval_irq				= WORK_INTERVAL_IRQ;
-	info->elapsed_s					= 0;
 
 	mutex_init(&info->pogo_lock);
 	mutex_init(&info->routine_lock);
 	wakeup_source_add(&info->wake_lock);
-	wakeup_source_add(&info->heartbeat_wake_lock);
 	INIT_DELAYED_WORK(&info->irq_work, pogo_extcon_irq_work);
 	INIT_DELAYED_WORK(&info->routine_work, pogo_extcon_routine_work);
-	INIT_DELAYED_WORK(&info->heartbeat_work, pogo_extcon_heartbeat_work);
 
 	ret = pogo_extcon_parse_dt(info);
 	if (ret) {
 		dev_err(info->dev, "%s: parse dts failed, ret: %d\n",
 			__func__, ret);
 		wakeup_source_remove(&info->wake_lock);
-		wakeup_source_remove(&info->heartbeat_wake_lock);
+
 		return ret;
 	}
 
@@ -928,7 +867,6 @@ err_adc_channel:
 	mutex_destroy(&info->routine_lock);
 	device_init_wakeup(&pdev->dev, false);
 	wakeup_source_remove(&info->wake_lock);
-	wakeup_source_remove(&info->heartbeat_wake_lock);
 	if (info)
 		devm_kfree(&pdev->dev, info);
 	info = NULL;
@@ -949,7 +887,6 @@ static void pogo_extcon_shutdown(struct platform_device *pdev)
 	free_irq(info->irq, info);
 	cancel_delayed_work_sync(&info->irq_work);
 	cancel_delayed_work_sync(&info->routine_work);
-	cancel_delayed_work_sync(&info->heartbeat_work);
 	input_unregister_device(info->input_dev_pwk);
 	input_unregister_device(info->input_dev_tlm);
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)

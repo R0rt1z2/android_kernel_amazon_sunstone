@@ -54,6 +54,7 @@ static DEFINE_MUTEX(layering_info_lock);
 #define RSZ_IN_MAX_HEIGHT 4096
 #define DISP_RSZ_LAYER_NUM 1
 #define MAX_CLEAR_LAYER 2
+#define DISP_LAYER_RULE_MAX_NUM 1024
 
 static struct {
 	enum LYE_HELPER_OPT opt;
@@ -2089,7 +2090,7 @@ static int check_disp_info(struct drm_mtk_layering_info *disp_info)
 			return -1;
 		}
 
-		if (layer_num < 0) {
+		if ((layer_num < 0) || (layer_num >= DISP_LAYER_RULE_MAX_NUM)) {
 			DDPPR_ERR("[HRT] disp_idx %d, invalid layer num %d\n", disp_idx, layer_num);
 			return -1;
 		}

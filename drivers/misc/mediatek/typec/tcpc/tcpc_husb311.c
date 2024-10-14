@@ -29,6 +29,7 @@
 #include <linux/version.h>
 #include <uapi/linux/sched/types.h>
 #include <linux/sched/clock.h>
+#include <linux/reboot.h>
 
 #include "inc/pd_dbg_info.h"
 #include "inc/tcpci.h"
@@ -68,6 +69,7 @@ struct husb311_chip {
 	int irq_gpio;
 	int irq;
 	int chip_id;
+	struct notifier_block reboot_nb;
 };
 
 #if IS_ENABLED(CONFIG_RT_REGMAP)
@@ -1599,6 +1601,21 @@ static inline int husb311_check_revision(struct i2c_client *client)
 	return did;
 }
 
+static int husb311_i2c_reboot_callback(struct notifier_block *nb,
+                                 unsigned long event, void *data)
+{
+	struct husb311_chip *chip = container_of(nb, struct husb311_chip, reboot_nb);
+
+	if (chip != NULL) {
+		if (chip->irq)
+			disable_irq(chip->irq);
+		tcpm_shutdown(chip->tcpc);
+	} else
+		pr_warn("no husb311 typec active;\n");
+
+	return NOTIFY_OK;
+}
+
 static int husb311_i2c_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -1663,6 +1680,9 @@ static int husb311_i2c_probe(struct i2c_client *client,
 		goto err_irq_init;
 	}
 
+	chip->reboot_nb.notifier_call = husb311_i2c_reboot_callback;
+	register_reboot_notifier(&chip->reboot_nb);
+
 	tcpc_schedule_init_work(chip->tcpc);
 	pr_info("%s probe OK!\n", __func__);
 	return 0;
@@ -1682,7 +1702,7 @@ static int husb311_i2c_remove(struct i2c_client *client)
 
 	if (chip) {
 		cancel_delayed_work_sync(&chip->poll_work);
-
+		unregister_reboot_notifier(&chip->reboot_nb);
 		tcpc_device_unregister(chip->dev, chip->tcpc);
 		husb311_regmap_deinit(chip);
 	}
@@ -1820,12 +1840,11 @@ static void husb311_shutdown(struct i2c_client *client)
 {
 	struct husb311_chip *chip = i2c_get_clientdata(client);
 
-	/* Please reset IC here */
-	if (chip != NULL) {
-		if (chip->irq)
-			disable_irq(chip->irq);
-		tcpm_shutdown(chip->tcpc);
-	} else {
+	/* Move the tcpm_shutdown function to the callback
+	 * function of register_reboot_notifier.
+	 * So it can executed in the early stage of the shutdown flow.
+	 */
+	if (chip == NULL) {
 		i2c_smbus_write_byte_data(client, HUSB311_REG_SWRESET, 0x01);
 	}
 }

@@ -43,6 +43,23 @@ enum DIO4480_RESGISTER {
 	DIO4480_SWITCH_RESET	= 0x1E,
 };
 
+enum HL5280_RESGISTER {
+	HL5280_SWITCH_SETTINGS = 0x04,
+	HL5280_SWITCH_CONTROL  = 0x05,
+	HL5280_SWITCH_STATUS1  = 0x07,
+	HL5280_SLOW_L          = 0x08,
+	HL5280_SLOW_R          = 0x09,
+	HL5280_SLOW_MIC        = 0x0A,
+	HL5280_SLOW_SENSE      = 0x0B,
+	HL5280_SLOW_GND        = 0x0C,
+	HL5280_DELAY_L_R       = 0x0D,
+	HL5280_DELAY_L_MIC     = 0x0E,
+	HL5280_DELAY_L_SENSE   = 0x0F,
+	HL5280_DELAY_L_AGND    = 0x10,
+	HL5280_FUNC_EN         = 0x12,
+	HL5280_RESET           = 0x1E,
+};
+
 enum PINCTRL_PIN_STATE {
 	PIN_STATE_MOSIT_ON = 0,
 	PIN_STATE_MOSIT_OFF,
@@ -54,6 +71,7 @@ enum SWITCH_VENDOR {
 	WAS4780,
 	DIO4480,
 	OCP96011,
+	HL5280,
 	VENDOR_MAX
 };
 
@@ -62,6 +80,7 @@ static const char * const usbc_switch_name[VENDOR_MAX] = {
 	"was4780",
 	"DIO4480",
 	"OCP96011",
+	"HL5280",
 };
 static enum SWITCH_VENDOR usbc_supply;
 
@@ -116,6 +135,21 @@ static const struct was4780_reg_val dio_reg_i2c_defaults[] = {
 	{DIO4880_SWITCH_ENABLE, 0xF8},
 	{DIO4880_SWITCH_SELECT, 0x18},
 	{DIO4480_SWITCH_RESET, 0x01},
+};
+
+static const struct was4780_reg_val hl_reg_i2c_defaults[] = {
+	{HL5280_SLOW_L, 0x00},
+	{HL5280_SLOW_R, 0x00},
+	{HL5280_SLOW_MIC, 0x00},
+	{HL5280_SLOW_SENSE, 0x00},
+	{HL5280_SLOW_GND, 0x00},
+	{HL5280_DELAY_L_R, 0x00},
+	{HL5280_DELAY_L_MIC, 0x00},
+	{HL5280_DELAY_L_SENSE, 0x00},
+	{HL5280_DELAY_L_AGND, 0x09},
+	{HL5280_SWITCH_SETTINGS, 0xF8},
+	{HL5280_SWITCH_CONTROL, 0x18},
+	{HL5280_FUNC_EN, 0x08},
 };
 
 
@@ -525,6 +559,10 @@ static void was4780_update_reg_defaults(struct regmap *regmap)
 		for (i = 0; i < ARRAY_SIZE(dio_reg_i2c_defaults); i++)
 			regmap_write(regmap, dio_reg_i2c_defaults[i].reg,
 					   dio_reg_i2c_defaults[i].val);
+	} else if (usbc_supply == HL5280) {
+		for (i = 0; i < ARRAY_SIZE(hl_reg_i2c_defaults); i++)
+			regmap_write(regmap, hl_reg_i2c_defaults[i].reg,
+					   hl_reg_i2c_defaults[i].val);
 	} else {
 		for (i = 0; i < ARRAY_SIZE(was_reg_i2c_defaults); i++)
 			regmap_write(regmap, was_reg_i2c_defaults[i].reg,
@@ -548,6 +586,9 @@ static void usbc_switch_type_check(struct regmap *regmap)
 		break;
 	case 0x00:
 		usbc_supply = OCP96011;
+		break;
+	case 0x49:
+		usbc_supply = HL5280;
 		break;
 	default:
 		usbc_supply = INVALID_TYPE;

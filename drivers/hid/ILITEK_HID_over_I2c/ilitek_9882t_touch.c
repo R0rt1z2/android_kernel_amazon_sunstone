@@ -2571,13 +2571,19 @@ void ili_hid_report(u8 *raw_data, int size, struct hid_field *field)
 			ilits->pen_touch_time = ktime_get();
 
 			if (ilits->pen_serial != pen_serial) {
+				ILI_INFO(
+					"stylus_power %d, stylus_vid 0x%x, old_stylus_id 0x%x, stylus_id 0x%x",
+					raw_data[I2C_HID_STYLUS_BATTERY_STRENGTH],
+					(raw_data[ILITEK_HID_PEN_VENDOR_USAGE_1_H]
+					<< 8) | raw_data[ILITEK_HID_PEN_VENDOR_USAGE_1_L],
+					ilits->pen_serial, pen_serial);
 				ilits->pen_serial = pen_serial;
 				ilits->stylus_frame_num = 0;
 				new_pen = true;
 			}
 
 			ILI_DEBUG_INFO(
-				"stylus_battey_capacity %d, stylus_oem_vendor_id 0x%x, pen_serial 0x%x",
+				"stylus_battery_capacity %d, stylus_oem_vendor_id 0x%x, pen_serial 0x%x",
 				raw_data[I2C_HID_STYLUS_BATTERY_STRENGTH],
 				(raw_data[ILITEK_HID_PEN_VENDOR_USAGE_1_H]
 				<< 8) | raw_data[ILITEK_HID_PEN_VENDOR_USAGE_1_L],

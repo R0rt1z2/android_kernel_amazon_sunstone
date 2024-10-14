@@ -4330,49 +4330,50 @@ static int ilitek_stylus_report_uevent(struct device *dev,
 	return ret;
 }
 
-static u32 stylus_battey_capacity_jitter_filter(
-				     u32 stylus_battey_capacity,
-				     bool *stylus_battey_capacity_change,
+static u32 stylus_battery_capacity_jitter_filter(
+				     u32 stylus_battery_capacity,
+				     bool *stylus_battery_capacity_change,
 				     bool new_pen)
 {
-	static u32 last_stylus_battey_capacity;
-	static u32 last_stylus_battey_capacity_buf;
+	static u32 last_stylus_battery_capacity;
+	static u32 last_stylus_battery_capacity_buf;
 
-	if (stylus_battey_capacity_change == NULL) {
-		ILI_ERR("%s: stylus_battey_capacity_change is NULL\n",
+	if (stylus_battery_capacity_change == NULL) {
+		ILI_ERR("%s: stylus_battery_capacity_change is NULL\n",
 			__func__);
 		return -EINVAL;
 	}
 
 	/* new stylus,need to set new jitter parameters */
 	if (new_pen) {
-		last_stylus_battey_capacity = 0;
-		last_stylus_battey_capacity_buf = 0;
+		last_stylus_battery_capacity = 0;
+		last_stylus_battery_capacity_buf = 0;
 	}
 
 	/* algorithm for eliminating power jitter */
-	if (stylus_battey_capacity > last_stylus_battey_capacity &&
-	    stylus_battey_capacity < last_stylus_battey_capacity_buf) {
-		stylus_battey_capacity = last_stylus_battey_capacity;
-	} else if (stylus_battey_capacity != last_stylus_battey_capacity) {
-		last_stylus_battey_capacity = stylus_battey_capacity;
-		last_stylus_battey_capacity_buf =
+	if (stylus_battery_capacity > last_stylus_battery_capacity &&
+	    stylus_battery_capacity < last_stylus_battery_capacity_buf) {
+		stylus_battery_capacity = last_stylus_battery_capacity;
+	} else if (stylus_battery_capacity != last_stylus_battery_capacity) {
+		if (printk_ratelimit())
+			ILI_INFO(
+				"stylus battery power: %d -> %d\n",
+				last_stylus_battery_capacity,
+				stylus_battery_capacity);
+		last_stylus_battery_capacity = stylus_battery_capacity;
+		last_stylus_battery_capacity_buf =
 			STYLUS_BATTERY_CAPACITY_JITTER_BUF(
-			last_stylus_battey_capacity);
-		*stylus_battey_capacity_change = true;
-		ILI_DEBUG_INFO(
-			"last_stylus_battey_capacity is %d, last_stylus_battey_capacity_buf %d.\n",
-			last_stylus_battey_capacity,
-			last_stylus_battey_capacity_buf);
+			last_stylus_battery_capacity);
+		*stylus_battery_capacity_change = true;
 	}
 
-	return stylus_battey_capacity;
+	return stylus_battery_capacity;
 }
 
 int ilitek_stylus_uevent(const u8 *raw_data, bool new_pen)
 {
-	u32 stylus_battey_capacity = 0, new_stylus_battey_capacity = 0;
-	bool stylus_battey_capacity_change = false;
+	u32 stylus_battery_capacity = 0, new_stylus_battery_capacity = 0;
+	bool stylus_battery_capacity_change = false;
 	u16 stylus_oem_vendor_id = 0;
 
 	if (!ilits || !ilits->stylus_dev || !raw_data) {
@@ -4391,13 +4392,13 @@ int ilitek_stylus_uevent(const u8 *raw_data, bool new_pen)
 		return -EINVAL;
 	}
 
-	/* get stylus_battey_capacity */
-	stylus_battey_capacity = raw_data[I2C_HID_STYLUS_BATTERY_STRENGTH];
-	/* stylus battey capacity filter outliers */
-	if ((stylus_battey_capacity <= 0) || (stylus_battey_capacity > 100))
+	/* get stylus_battery_capacity */
+	stylus_battery_capacity = raw_data[I2C_HID_STYLUS_BATTERY_STRENGTH];
+	/* stylus battery capacity filter outliers */
+	if ((stylus_battery_capacity <= 0) || (stylus_battery_capacity > 100))
 		return -EINVAL;
-	new_stylus_battey_capacity = stylus_battey_capacity_jitter_filter(
-		stylus_battey_capacity, &stylus_battey_capacity_change,
+	new_stylus_battery_capacity = stylus_battery_capacity_jitter_filter(
+		stylus_battery_capacity, &stylus_battery_capacity_change,
 		new_pen);
 
 	/* set uevent env value */
@@ -4405,16 +4406,16 @@ int ilitek_stylus_uevent(const u8 *raw_data, bool new_pen)
 	snprintf(ilits->stylus_uevent.stylus_vendor_id, ENV_SIZE, "0x%x",
 		 stylus_oem_vendor_id);
 	snprintf(ilits->stylus_uevent.stylus_capacity, ENV_SIZE, "%d",
-		 new_stylus_battey_capacity);
-	if ((new_stylus_battey_capacity <= 40) &&
-	    (new_stylus_battey_capacity > 0))
+		 new_stylus_battery_capacity);
+	if ((new_stylus_battery_capacity <= 40) &&
+	    (new_stylus_battery_capacity > 0))
 		snprintf(ilits->stylus_uevent.stylus_status, ENV_SIZE, "%s",
 			 "LOW ");
 	else
 		snprintf(ilits->stylus_uevent.stylus_status, ENV_SIZE, "%s",
 			 "NORMAL ");
 
-	if (stylus_battey_capacity_change || new_pen)
+	if (stylus_battery_capacity_change || new_pen)
 		kobject_uevent(&ilits->stylus_dev->kobj, KOBJ_CHANGE);
 
 	return 0;

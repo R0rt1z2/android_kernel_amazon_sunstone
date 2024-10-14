@@ -367,22 +367,42 @@ static int mtk_jpeg_try_fmt_mplane(struct v4l2_pix_format_mplane *pix_mp,
 
 static int mtk_jpeg_qbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
 {
-	struct v4l2_fh *fh = file->private_data;
+	struct v4l2_fh *fh;
 	struct vb2_queue *vq;
 	struct vb2_buffer *vb;
 	struct mtk_jpeg_src_buf *jpeg_src_buf;
-	struct mtk_jpeg_ctx *ctx = mtk_jpeg_fh_to_ctx(priv);
-	struct mtk_jpeg_dev *jpeg = ctx->jpeg;
+	struct mtk_jpeg_ctx *ctx;
+	struct mtk_jpeg_dev *jpeg;
 	int ret;
 
-	vq = v4l2_m2m_get_vq(fh->m2m_ctx, buf->type);
-	if (buf->index >= vq->num_buffers)
+	if (IS_ERR_OR_NULL(file) || IS_ERR_OR_NULL(priv) || IS_ERR_OR_NULL(buf)) {
+		pr_info("%s %d qbuf error, invalid input param\n", __func__, __LINE__);
 		return -EINVAL;
+	}
+
+	fh = file->private_data;
+	ctx = mtk_jpeg_fh_to_ctx(priv);
+	if (IS_ERR_OR_NULL(ctx) || IS_ERR_OR_NULL(fh)) {
+		pr_info("%s %d invalid parameter\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+
+	if (IS_ERR_OR_NULL(buf->m.planes) || (buf->length <= 0)) {
+		pr_info("%s %d invalid buffer parameter\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+
+	vq = v4l2_m2m_get_vq(fh->m2m_ctx, buf->type);
+	if (buf->index >= vq->num_buffers) {
+		pr_info("%s %d buffer index out of range\n", __func__, __LINE__);
+		return -EINVAL;
+	}
 
 	vb = vq->bufs[buf->index];
 	jpeg_src_buf = mtk_jpeg_vb2_to_srcbuf(vb);
 	jpeg_src_buf->bs_size = buf->m.planes[0].bytesused;
 
+	jpeg = ctx->jpeg;
 	if (jpeg->variant->is_encoder) {
 		if (buf->flags & V4L2_BUF_FLAG_NO_CACHE_CLEAN)
 			jpeg_src_buf->flags |= NO_CAHCE_CLEAN;

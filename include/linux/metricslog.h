@@ -73,7 +73,7 @@
 #define METRICS_INPUT_SCHEMA_ID "9okq/2/03330410"
 
 /* Schema name: TabletBspStylusEventNonAnonymous */
-#define METRICS_STYLUS_SCHEMA_ID "7qwh/2/02330403"
+#define METRICS_STYLUS_SCHEMA_ID "i196/2/02330413"
 
 /* schema name: TabletBspMetricThermalCoolerSupportChild */
 #define METRICS_THERMAL_COOLER_SCHEMA_ID "y9ic/2/02330410"

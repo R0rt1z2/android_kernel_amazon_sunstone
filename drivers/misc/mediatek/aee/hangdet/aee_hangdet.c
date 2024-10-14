@@ -271,6 +271,7 @@ static void aee_dump_timer_func(struct timer_list *t)
 	if (sched_clock() - aee_dump_timer_t < CHG_TMO_DLY_SEC * 1000000000) {
 		g_change_tmo = 0;
 		aee_dump_timer_t = 0;
+		g_hang_detected = 0;
 		spin_unlock(&lock);
 		return;
 	}
@@ -279,12 +280,14 @@ static void aee_dump_timer_func(struct timer_list *t)
 		&& (sched_clock() - all_k_timer_t) < (CHG_TMO_DLY_SEC + 1) * 1000000000) {
 		g_change_tmo = 0;
 		aee_dump_timer_t = 0;
+		g_hang_detected = 0;
 		spin_unlock(&lock);
 		return;
 	} else if ((all_k_timer_t > sched_clock())
 		&& (ULLONG_MAX - all_k_timer_t + sched_clock()) < (CHG_TMO_DLY_SEC + 1) * 1000000000) {
 		g_change_tmo = 0;
 		aee_dump_timer_t = 0;
+		g_hang_detected = 0;
 		spin_unlock(&lock);
 		return;
 	}

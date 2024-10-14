@@ -561,6 +561,14 @@ int ili_hid_set_tp_data_len(int format, bool send, u8 *data)
 	int ret = 0, tp_mode = ilits->actual_tp_mode, len = 0,
 	    geture_info_length = 0, demo_mode_packet_len = 0;
 
+	if (data == NULL) {
+		data_type = P5_X_FW_SIGNAL_DATA_MODE;
+		ILI_ERR("Data Type is Null, Set Single data type\n");
+	} else {
+		data_type = data[0];
+		ILI_INFO("Set data type = 0x%X\n", data[0]);
+	}
+
 	if (ilits->rib.nCustomerType == ilits->customertype_off &&
 	    ilits->rib.nReportResolutionMode == POSITION_LOW_RESOLUTION) {
 		geture_info_length = P5_X_GESTURE_INFO_LENGTH;
@@ -610,7 +618,6 @@ int ili_hid_set_tp_data_len(int format, bool send, u8 *data)
 			len = P5_X_DEBUG_HIGH_RESOLUTION_FINGER_DATA_LENGTH;
 		}
 
-		data_type = data[0];
 		if (ilits->PenType == POSITION_PEN_TYPE_ON) {
 			ilits->touch_num = MAX_TOUCH_NUM + MAX_PEN_NUM;
 			ilits->pen_info.report_type = P5_X_HAND_PEN_TYPE;

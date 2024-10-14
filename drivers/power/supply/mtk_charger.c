@@ -1525,6 +1525,42 @@ static ssize_t ibus_show(struct device *dev,
 
 static DEVICE_ATTR_RO(ibus);
 
+static ssize_t iusb_setting_show(struct device *dev,
+	 struct device_attribute *attr, char *buf)
+{
+	struct mtk_charger *pinfo = dev_get_drvdata(dev);
+	int current_data = 0;
+
+	current_data = pinfo->chg_data[CHG1_SETTING].input_current_limit;
+
+	return sprintf(buf, "%d\n", current_data);
+}
+static const DEVICE_ATTR_RO(iusb_setting);
+
+static ssize_t aicl_result_show(struct device *dev,
+	 struct device_attribute *attr, char *buf)
+{
+	struct mtk_charger *pinfo = dev_get_drvdata(dev);
+	int current_data = 0;
+
+	current_data = pinfo->chg_data[CHG1_SETTING].input_current_limit_by_aicl;
+
+	return sprintf(buf, "%d\n", current_data);
+}
+static const DEVICE_ATTR_RO(aicl_result);
+
+static ssize_t input_current_limit_show(struct device *dev,
+	 struct device_attribute *attr, char *buf)
+{
+	struct mtk_charger *pinfo = dev_get_drvdata(dev);
+	int current_data = 0;
+
+	current_data = pinfo->chg_data[CHG1_SETTING].force_input_current_limit;
+
+	return sprintf(buf, "%d\n", current_data);
+}
+static const DEVICE_ATTR_RO(input_current_limit);
+
 /* procfs */
 static int mtk_chg_set_cv_show(struct seq_file *m, void *data)
 {
@@ -3663,6 +3699,18 @@ static int mtk_charger_setup_files(struct platform_device *pdev)
 		goto _out;
 
 	ret = device_create_file(&(pdev->dev), &dev_attr_ibus);
+	if (ret)
+		goto _out;
+
+	ret = device_create_file(&(pdev->dev), &dev_attr_aicl_result);
+	if (ret)
+		goto _out;
+
+	ret = device_create_file(&(pdev->dev), &dev_attr_iusb_setting);
+	if (ret)
+		goto _out;
+
+	ret = device_create_file(&(pdev->dev), &dev_attr_input_current_limit);
 	if (ret)
 		goto _out;
 

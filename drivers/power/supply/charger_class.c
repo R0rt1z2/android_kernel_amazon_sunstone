@@ -712,8 +712,11 @@ EXPORT_SYMBOL(charger_dev_safety_check);
 
 int charger_dev_notify(struct charger_device *chg_dev, int event)
 {
-	return srcu_notifier_call_chain(
-		&chg_dev->evt_nh, event, &chg_dev->noti);
+	if (chg_dev != NULL)
+		return srcu_notifier_call_chain(&chg_dev->evt_nh,
+						event, &chg_dev->noti);
+
+	return -EOPNOTSUPP;
 }
 EXPORT_SYMBOL(charger_dev_notify);
 

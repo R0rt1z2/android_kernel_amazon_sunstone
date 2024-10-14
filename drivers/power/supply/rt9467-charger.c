@@ -64,6 +64,7 @@ static char gbuffer[IAICR_CAL_SIZE];
 #define RT9467_REG_CHG_HIDDEN_CTRL7	0x26
 #define RT9467_REG_CHG_HIDDEN_CTRL9	0x28
 #define RT9467_REG_CHG_HIDDEN_CTRL15	0x2E
+#define RT9467_REG_CHG_HIDDEN_CTRL22	0x35
 #define RT9467_REG_DEVICE_ID		0x40
 #define RT9467_REG_CHG_STAT		0x42
 #define RT9467_REG_CHG_STATC		0x50
@@ -138,6 +139,8 @@ enum rt9467_fields {
 	F_EN_PSK,
 	/* RT9467_REG_CHG_HIDDEN_CTRL15*/
 	F_AUTO_SENSE,
+	/* RT9467_REG_CHG_HIDDEN_CTRL22 */
+	F_BATOVP_LVL,
 	F_MAX_FIELDS
 };
 
@@ -222,6 +225,7 @@ static struct reg_field rt9467_chg_fields[] = {
 	[F_DISCHG_EN]		= REG_FIELD(RT9467_REG_CHG_HIDDEN_CTRL2, 2, 2),
 	[F_EN_PSK]		= REG_FIELD(RT9467_REG_CHG_HIDDEN_CTRL9, 7, 7),
 	[F_AUTO_SENSE]		= REG_FIELD(RT9467_REG_CHG_HIDDEN_CTRL15, 0, 0),
+	[F_BATOVP_LVL]		= REG_FIELD(RT9467_REG_CHG_HIDDEN_CTRL22, 5, 6),
 };
 
 enum {
@@ -981,12 +985,43 @@ static int rt9467_psy_set_ichg(struct rt9467_chg_data *data, unsigned int ichg)
 
 static int rt9467_psy_set_cv(struct rt9467_chg_data *data, unsigned int cv)
 {
-	unsigned int sel = 0;
+	int ret;
+	unsigned int sel = 0, val;
+
+	ret = rt9467_enable_hidden_mode(data, true);
+	if (ret) {
+		dev_err(data->dev, "Failed to enter hidden mode\n");
+		return ret;
+	}
+
+	/* vsys overshoot WA when set_cv */
+	ret = regmap_field_read(data->rm_field[F_BATOVP_LVL], &val);
+	if (ret) {
+		dev_err(data->dev, "Failed to read BATOVP LEVEL %s\n", ret);
+		goto out;
+	}
+	/* set reg0x35[6:5]=11 */
+	ret = regmap_field_write(data->rm_field[F_BATOVP_LVL], 0x03);
+	if (ret) {
+		dev_err(data->dev, "Failed to disable BATOVP %s\n", ret);
+		goto out;
+	}
 
 	linear_range_get_selector_within(rt9467_lranges + RT9467_RANGE_VOREG, cv,
 					 &sel);
 	dev_info(data->dev, "%s cv = %d(0x%02X)\n", __func__, cv, sel);
-	return regmap_field_write(data->rm_field[F_VOREG], sel);
+
+	ret = regmap_field_write(data->rm_field[F_VOREG], sel);
+	if (ret)
+		dev_err(data->dev, "Failed to set cv %s\n", ret);
+
+	mdelay(5);
+out:
+	ret = regmap_field_write(data->rm_field[F_BATOVP_LVL], val);
+	if (ret)
+		dev_err(data->dev, "Failed to roll back BATOVP LEVEL %s\n", ret);
+
+	return rt9467_enable_hidden_mode(data, false);
 }
 
 static int rt9467_psy_set_aicr(struct rt9467_chg_data *data, unsigned int aicr)
@@ -1608,9 +1643,9 @@ static int rt9467_sw_reset(struct rt9467_chg_data *data)
 {
 	int ret;
 	u8 evt[7];
-	/* Register 0x01 ~ 0x10 */
+	/* Register 0x01 ~ 0x10, ichg 500mA */
 	u8 rst_data[] = {
-		0x10, 0x03, 0x23, 0x3C, 0x67, 0x0B, 0x4C, 0xA1,
+		0x10, 0x03, 0x23, 0x3C, 0x67, 0x0B, 0x10, 0xA1,
 		0x3C, 0x58, 0x2C, 0x02, 0x52, 0x05, 0x00, 0x10
 	};
 	u8 rt9467_irq_maskall[7] = {0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -3204,26 +3239,11 @@ static int rt9467_charger_probe(struct platform_device *pdev)
 		goto out;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(rt9467_irqs); i++) {
-		irqno = platform_get_irq_byname(pdev, rt9467_irqs[i].irq_name);
-		if (irqno < 0) {
-			ret = irqno;
-			goto out;
-		}
-
-		ret = devm_request_threaded_irq(&pdev->dev, irqno, NULL,
-						rt9467_irqs[i].handler, 0,
-						dev_name(&pdev->dev), data);
-		if (ret) {
-			dev_err(&pdev->dev, "Failed to request irq %d", irqno);
-			goto out;
-		}
-	}
-
 #if IS_ENABLED(CONFIG_MTK_CHARGER)
 	ret = rt9467_register_mtk_charger_dev(data);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to register chgdev\n");
+		ret = -EPROBE_DEFER;
 		goto out;
 	}
 
@@ -3251,6 +3271,22 @@ static int rt9467_charger_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to create shipping attr\n");
 		goto out_dev_attr;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(rt9467_irqs); i++) {
+		irqno = platform_get_irq_byname(pdev, rt9467_irqs[i].irq_name);
+		if (irqno < 0) {
+			ret = irqno;
+			goto out;
+		}
+
+		ret = devm_request_threaded_irq(&pdev->dev, irqno, NULL,
+						rt9467_irqs[i].handler, 0,
+						dev_name(&pdev->dev), data);
+		if (ret) {
+			dev_err(&pdev->dev, "Failed to request irq %d", irqno);
+			goto out;
+		}
 	}
 
 	schedule_work(&data->init_work);

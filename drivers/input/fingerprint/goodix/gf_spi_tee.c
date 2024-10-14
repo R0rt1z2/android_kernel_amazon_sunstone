@@ -61,7 +61,7 @@
 #define GF_NETLINK_ROUTE 29   /* for GF test temporary */
 #define MAX_NL_MSG_LEN 16
 
-#define WAKELOCK_HOLD_TIME 500 /* in ms */
+#define WAKELOCK_HOLD_TIME 700 /* in ms */
 
 #define GF_WAKESOURCE_ENABLE 1
 #define FPR_SUPPORT_DISPALY_EVENTS 0

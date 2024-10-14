@@ -396,7 +396,7 @@ exit:
 static int mtk_rtc_write_trigger(struct mt6397_rtc *rtc)
 {
 	int ret;
-	u32 data;
+	u32 data = 0;
 
 	ret = regmap_write(rtc->regmap, rtc->addr_base + rtc->data->wrtgr, 1);
 	if (ret < 0)
@@ -637,7 +637,7 @@ int mtk_rtc_mark_sw_lprst(void)
 {
 	struct mt6397_rtc *rtc = mt6397_rtc_proxy;
 	int ret;
-	u32 data;
+	u32 data = 0;
 
 	mutex_lock(&rtc->lock);
 	ret = regmap_read(rtc->regmap, rtc->addr_base + RTC_SPAR0, &data);
@@ -795,7 +795,8 @@ static int mtk_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
 	time64_t time;
 	struct mt6397_rtc *rtc = dev_get_drvdata(dev);
-	int days, sec, ret;
+	int days, ret;
+	int sec = 0;
 	unsigned long long timeout = sched_clock() + 500000000;
 
 	do {
@@ -1204,10 +1205,49 @@ static int mtk_rtc_probe(struct platform_device *pdev)
 
 static void mtk_rtc_shutdown(struct platform_device *pdev)
 {
+	struct mt6397_rtc *rtc = dev_get_drvdata(&pdev->dev);
+	u32 data = 0;
+	u16 al_data[RTC_OFFSET_COUNT] = { 0 };
+	int ret;
+
+	ret = regmap_read(rtc->regmap, rtc->addr_base + RTC_PDN1, &data);
+	dev_info(&pdev->dev, "%s PDN1 = %d\n", __func__, data);
+	if (!(data & RTC_PDN1_PWRON_TIME)) {
+		mutex_lock(&rtc->lock);
+		ret = regmap_update_bits(rtc->regmap,
+					 rtc->addr_base + RTC_IRQ_EN,
+					 RTC_IRQ_EN_ONESHOT_AL, 0);
+		if (ret < 0)
+			goto exit;
+
+		ret = regmap_bulk_read(rtc->regmap, rtc->addr_base + RTC_AL_SEC,
+				       al_data, RTC_OFFSET_COUNT);
+		if (ret < 0)
+			goto exit;
+
+		al_data[RTC_OFFSET_SEC] = (al_data[RTC_OFFSET_SEC] & ~(RTC_AL_SEC_MASK));
+		al_data[RTC_OFFSET_MIN] = (al_data[RTC_OFFSET_MIN] & ~(RTC_AL_MIN_MASK));
+		al_data[RTC_OFFSET_HOUR] = (al_data[RTC_OFFSET_HOUR] & ~(RTC_AL_HOU_MASK));
+		al_data[RTC_OFFSET_DOM] = (al_data[RTC_OFFSET_DOM] & ~(RTC_AL_DOM_MASK));
+		al_data[RTC_OFFSET_MTH] = (al_data[RTC_OFFSET_MTH] & ~(RTC_AL_MTH_MASK));
+		al_data[RTC_OFFSET_YEAR] = (al_data[RTC_OFFSET_YEAR] & ~(RTC_AL_YEA_MASK));
+
+		ret = regmap_bulk_write(rtc->regmap,
+					rtc->addr_base + RTC_AL_SEC,
+					al_data, RTC_OFFSET_COUNT);
+		if (ret < 0)
+			goto exit;
+		mtk_rtc_write_trigger(rtc);
+		mutex_unlock(&rtc->lock);
+	}
 
 #ifdef SUPPORT_EOSC_CALI
 	mtk_rtc_enable_k_eosc(&pdev->dev);
 #endif
+	return;
+exit:
+	dev_err(&pdev->dev, "%s error\n", __func__);
+	mutex_unlock(&rtc->lock);
 }
 
 #if IS_ENABLED(CONFIG_PM_SLEEP)
