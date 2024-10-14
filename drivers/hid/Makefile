@@ -147,6 +147,7 @@ obj-$(CONFIG_I2C_HID_ILITEK)	+= ILITEK_HID_over_I2c/
 obj-$(CONFIG_HID_TOUCHSCREEN_FTS)	+= hid-focal/
 obj-$(CONFIG_I2C_HID_OF_NVT_TS)	+= i2c_hid_of_nvt_ts/
 obj-$(CONFIG_STYLUS_BATTERY_ALGO) += stylus/
+obj-$(CONFIG_HID_TOUCH_METRICS) += hid_touch_metrics/
 
 obj-$(CONFIG_INTEL_ISH_HID)	+= intel-ish-hid/
 obj-$(INTEL_ISH_FIRMWARE_DOWNLOADER)	+= intel-ish-hid/

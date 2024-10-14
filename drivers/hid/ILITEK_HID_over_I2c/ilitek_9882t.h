@@ -115,6 +115,11 @@
 #include "stylus_battery_algo.h"
 #endif
 
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+#include "hid_touch_metrics.h"
+extern touch_metrics_info_t touch_metrics_data;
+#endif
+
 #define DRIVER_VERSION "3.0.7.0.210618"
 
 #define ENABLE 1

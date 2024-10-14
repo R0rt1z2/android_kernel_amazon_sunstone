@@ -306,74 +306,143 @@ long __weak get_user_pages_durable(unsigned long start,
 #if IS_ENABLED(CONFIG_MTEE_CMA_SECURE_MEMORY)
 #include <linux/delay.h>
 #define NO_CMA_RELEASE_THROUGH_SHRINKER_FOR_EARLY_STAGE
-static struct cma *tz_cma;
-static struct page *secure_pages = NULL;
-static size_t secure_size;
+#if IS_ENABLED(CONFIG_WFD_DYNAMIC_SEC_BUF)
+static struct cma *tz_wfd_cma;
+static struct page *secure_wfd_pages;
+static size_t secure_wfd_size;
+#endif
+#if IS_ENABLED(CONFIG_SVP_DYNAMIC_SEC_BUF)
+static struct cma *tz_svp_cma;
+static struct page *secure_svp_pages;
+static size_t secure_svp_size;
+#endif
 
 struct page __weak *cma_alloc_large(struct cma *cma, int count, unsigned int align)
 {
 	return cma_alloc(cma, count, align, GFP_KERNEL);
 }
 
+#if IS_ENABLED(CONFIG_WFD_DYNAMIC_SEC_BUF)
 /* TEE chunk memory allocate by REE service
  */
-int KREE_ServGetChunkmemPool(u32 op,
+int KREE_ServGetWFDChunkmemPool(u32 op,
 			u8 uparam[REE_SERVICE_BUFFER_SIZE])
 {
 	struct ree_service_chunk_mem *chunkmem;
 	int retry;
 
-	if (!tz_cma)
+	if (!tz_wfd_cma)
 		return TZ_RESULT_ERROR_OUT_OF_MEMORY;
 
 	/* get parameters */
 	chunkmem = (struct ree_service_chunk_mem *)uparam;
 
-	if (secure_pages != NULL) {
+	if (secure_wfd_pages != NULL) {
 		pr_warn("%s() already allocated!\n", __func__);
 		return TZ_RESULT_ERROR_OUT_OF_MEMORY;
 	}
 
 	retry = 10;
 	while (retry-- > 0) {
-		secure_pages = cma_alloc_large(tz_cma, secure_size / SZ_4K,
+		secure_wfd_pages = cma_alloc_large(tz_wfd_cma, secure_wfd_size / SZ_4K,
 						get_order(SZ_256K));
-		if (secure_pages)
+		if (secure_wfd_pages)
 			break;
 	}
 
-	if (secure_pages == NULL) {
+	if (secure_wfd_pages == NULL) {
 		pr_warn("%s() cma_alloc() failed!\n", __func__);
 		return TZ_RESULT_ERROR_OUT_OF_MEMORY;
 	}
-	chunkmem->size = secure_size;
-	chunkmem->chunkmem_pa = (uint64_t)page_to_phys(secure_pages);
+	chunkmem->size = secure_wfd_size;
+	chunkmem->chunkmem_pa = (uint64_t)page_to_phys(secure_wfd_pages);
 
 	pr_warn("%s() get @%llx [0x%zx]\n", __func__,
-			chunkmem->chunkmem_pa, secure_size);
+			chunkmem->chunkmem_pa, secure_wfd_size);
 
 	/* flush cache to avoid writing secure memory after allocation. */
-	flush_dcache_page(secure_pages);
+	flush_dcache_page(secure_wfd_pages);
 
 	return TZ_RESULT_SUCCESS;
 }
 
-int KREE_ServReleaseChunkmemPool(u32 op,
+int KREE_ServReleaseWFDChunkmemPool(u32 op,
 			u8 uparam[REE_SERVICE_BUFFER_SIZE])
 {
-	if (secure_pages != NULL) {
-		phys_addr_t addr = page_to_phys(secure_pages);
+	if (secure_wfd_pages != NULL) {
+		phys_addr_t addr = page_to_phys(secure_wfd_pages);
 
-		cma_release(tz_cma, secure_pages,
-				secure_size >> PAGE_SHIFT);
+		cma_release(tz_wfd_cma, secure_wfd_pages,
+				secure_wfd_size >> PAGE_SHIFT);
 		pr_warn("%s() release @%pax [0x%zx]\n", __func__,
-				&addr, secure_size);
-		flush_dcache_page(secure_pages);
-		secure_pages = NULL;
+				&addr, secure_wfd_size);
+		flush_dcache_page(secure_wfd_pages);
+		secure_wfd_pages = NULL;
 		return TZ_RESULT_SUCCESS;
 	}
 	return TZ_RESULT_ERROR_GENERIC;
 }
+#endif
+
+#if IS_ENABLED(CONFIG_SVP_DYNAMIC_SEC_BUF)
+int KREE_ServGetSVPChunkmemPool(u32 op,
+			u8 uparam[REE_SERVICE_BUFFER_SIZE])
+{
+	struct ree_service_chunk_mem *chunkmem;
+	int retry;
+
+	if (!tz_svp_cma)
+		return TZ_RESULT_ERROR_OUT_OF_MEMORY;
+
+	/* get parameters */
+	chunkmem = (struct ree_service_chunk_mem *)uparam;
+
+	if (secure_svp_pages != NULL) {
+		pr_warn("%s() already allocated!\n", __func__);
+		return TZ_RESULT_ERROR_OUT_OF_MEMORY;
+	}
+
+	retry = 10;
+	while (retry-- > 0) {
+		secure_svp_pages = cma_alloc_large(tz_svp_cma, secure_svp_size / SZ_4K,
+						get_order(SZ_256K));
+		if (secure_svp_pages)
+			break;
+	}
+
+	if (secure_svp_pages == NULL) {
+		pr_warn("%s() cma_alloc() failed!\n", __func__);
+		return TZ_RESULT_ERROR_OUT_OF_MEMORY;
+	}
+	chunkmem->size = secure_svp_size;
+	chunkmem->chunkmem_pa = (uint64_t)page_to_phys(secure_svp_pages);
+
+	pr_warn("%s() get @%llx [0x%zx]\n", __func__,
+			chunkmem->chunkmem_pa, secure_svp_size);
+
+	/* flush cache to avoid writing secure memory after allocation. */
+	flush_dcache_page(secure_svp_pages);
+
+	return TZ_RESULT_SUCCESS;
+}
+
+int KREE_ServReleaseSVPChunkmemPool(u32 op,
+			u8 uparam[REE_SERVICE_BUFFER_SIZE])
+{
+	if (secure_svp_pages != NULL) {
+		phys_addr_t addr = page_to_phys(secure_svp_pages);
+
+		cma_release(tz_svp_cma, secure_svp_pages,
+				secure_svp_size >> PAGE_SHIFT);
+		pr_warn("%s() release @%pax [0x%zx]\n", __func__,
+				&addr, secure_svp_size);
+		flush_dcache_page(secure_svp_pages);
+		secure_svp_pages = NULL;
+		return TZ_RESULT_SUCCESS;
+	}
+	return TZ_RESULT_ERROR_GENERIC;
+}
+#endif
 
 #ifndef NO_CMA_RELEASE_THROUGH_SHRINKER_FOR_EARLY_STAGE
 
@@ -612,14 +681,24 @@ static int ree_service(void *data)
 			KREE_ServThreadCreate(REE_SERV_THREAD_CREATE,
 					      shmparam.buffer);
 		break;
-#if IS_ENABLED(CONFIG_MTEE_CMA_SECURE_MEMORY)
-		case REE_SERV_GET_CHUNK_MEMPOOL:
-			KREE_ServGetChunkmemPool(REE_SERV_GET_CHUNK_MEMPOOL,
+#if IS_ENABLED(CONFIG_WFD_DYNAMIC_SEC_BUF)
+		case REE_SERV_GET_WFD_CHUNK_MEMPOOL:
+			KREE_ServGetWFDChunkmemPool(REE_SERV_GET_WFD_CHUNK_MEMPOOL,
 					      shmparam.buffer);
 		break;
-		case REE_SERV_REL_CHUNK_MEMPOOL:
-			KREE_ServReleaseChunkmemPool(REE_SERV_REL_CHUNK_MEMPOOL,
+		case REE_SERV_REL_WFD_CHUNK_MEMPOOL:
+			KREE_ServReleaseWFDChunkmemPool(REE_SERV_REL_WFD_CHUNK_MEMPOOL,
 					      shmparam.buffer);
+		break;
+#endif
+#if IS_ENABLED(CONFIG_SVP_DYNAMIC_SEC_BUF)
+		case REE_SERV_GET_SVP_CHUNK_MEMPOOL:
+			KREE_ServGetSVPChunkmemPool(REE_SERV_GET_SVP_CHUNK_MEMPOOL,
+						shmparam.buffer);
+		break;
+		case REE_SERV_REL_SVP_CHUNK_MEMPOOL:
+			KREE_ServReleaseSVPChunkmemPool(REE_SERV_REL_SVP_CHUNK_MEMPOOL,
+						shmparam.buffer);
 		break;
 #endif
 		}
@@ -670,9 +749,9 @@ static int mtee_probe(struct platform_device *pdev)
 	mtee_clks_init(pdev);
 	mtee_pms_init(pdev);
 
-#if IS_ENABLED(CONFIG_MTEE_CMA_SECURE_MEMORY)
+#if IS_ENABLED(CONFIG_WFD_DYNAMIC_SEC_BUF)
 	/* get reverved memory address for secure wfd application  */
-	np = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
+	np = of_parse_phandle(pdev->dev.of_node, "wfd-memory-region", 0);
 	if (!np) {
 		pr_err("No secure wfd memory-region\n");
 		return -EINVAL;
@@ -686,9 +765,27 @@ static int mtee_probe(struct platform_device *pdev)
 
 	of_node_put(np);
 
-	tz_cma = (struct cma *)rmem->priv;
-	secure_size = (size_t)rmem->size;
-#endif /* CONFIG_MTEE_CMA_SECURE_MEMORY */
+	tz_wfd_cma = (struct cma *)rmem->priv;
+	secure_wfd_size = (size_t)rmem->size;
+#endif /* CONFIG_WFD_DYNAMIC_SEC_BUF */
+#if IS_ENABLED(CONFIG_SVP_DYNAMIC_SEC_BUF)
+	/* get reverved memory address for secure svp application  */
+	np = of_parse_phandle(pdev->dev.of_node, "svp-memory-region", 0);
+	if (!np) {
+		pr_err("No secure svp memory-region\n");
+		return -EINVAL;
+	}
+
+	rmem = of_reserved_mem_lookup(np);
+	if (!rmem) {
+		pr_err("failed to get secure wfd memory-region\n");
+		return -EINVAL;
+	}
+
+	of_node_put(np);
+	tz_svp_cma = (struct cma *)rmem->priv;
+	secure_svp_size = (size_t)rmem->size;
+#endif /* CONFIG_SVP_DYNAMIC_SEC_BUF */
 #endif /* CONFIG_OF */
 
 	tzret = KREE_InitTZ();

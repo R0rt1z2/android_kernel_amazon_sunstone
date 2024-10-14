@@ -1396,6 +1396,7 @@ skip_mlock:
 out:
 	return page;
 }
+EXPORT_SYMBOL_GPL(follow_trans_huge_pmd); // TAG_KERNEL_MM
 
 /* NUMA hinting page fault entry point for trans huge pmds */
 vm_fault_t do_huge_pmd_numa_page(struct vm_fault *vmf, pmd_t pmd)
@@ -1894,6 +1895,7 @@ spinlock_t *__pmd_trans_huge_lock(pmd_t *pmd, struct vm_area_struct *vma)
 	spin_unlock(ptl);
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(__pmd_trans_huge_lock); // TAG_KERNEL_MM
 
 /*
  * Returns true if a given pud maps a thp, false otherwise.

@@ -959,8 +959,9 @@ static void send_key_event(u32 keycode, u32 flag)
 	}
 #if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
 	minerva_metrics_log(metrics_log_buf, METRICS_LOG_MAX_SIZE,
-		"%s:%s:100:%s,KEY=%s;SY,STATE=%d;IN:us-east-1", METRICS_HEADSET_GROUP_ID,
-		METRICS_HEADSET_KEY_SCHEMA_ID, PREDEFINED_ESSENTIAL_KEY, key_string, flag);
+		"%s:%s:100:%s,%s,KEY=%s;SY,STATE=%d;IN:us-east-1", METRICS_HEADSET_GROUP_ID,
+		METRICS_HEADSET_KEY_SCHEMA_ID, PREDEFINED_DEVICE_ID_KEY,
+		PREDEFINED_ESSENTIAL_KEY, key_string, flag);
 #elif IS_ENABLED(CONFIG_AMAZON_METRICS_LOG)
 	if (snprintf(metrics_log_buf, sizeof(metrics_log_buf),
 		"%s:jack:key=%s;DV;1,state=%d;CT;1:NR",
@@ -1693,8 +1694,9 @@ static inline void headset_plug_out(void)
 	dis_micbias_done = false;
 #if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
 	minerva_metrics_log(metircs_log_buf, METRICS_LOG_MAX_SIZE,
-		"%s:%s:100:%s,UNPLUGGED=true;BO,PLUGGED=false;BO,CABLE=NONE;SY:us-east-1",
-		METRICS_HEADSET_GROUP_ID, METRICS_HEADSET_JACK_SCHEMA_ID, PREDEFINED_ESSENTIAL_KEY);
+		"%s:%s:100:%s,%s,UNPLUGGED=true;BO,PLUGGED=false;BO,CABLE=NONE;SY:us-east-1",
+		METRICS_HEADSET_GROUP_ID, METRICS_HEADSET_JACK_SCHEMA_ID,
+		PREDEFINED_DEVICE_ID_KEY, PREDEFINED_ESSENTIAL_KEY);
 #elif IS_ENABLED(CONFIG_AMAZON_METRICS_LOG)
 	if (snprintf(metrics_log_buf, sizeof(metrics_log_buf),
 		"%s:jack:unplugged=1;CT;1:NR", __func__) > 0)
@@ -2040,9 +2042,9 @@ static void accdet_work_callback(struct work_struct *work)
 #if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
 			if (accdet->pre_status == PLUG_OUT && (accdet->cable_type < HEADSET_FIVE_POLE)) {
 				minerva_metrics_log(metrics_log_buf, METRICS_LOG_MAX_SIZE,
-					"%s:%s:100:%s,UNPLUGGED=false;BO,PLUGGED=true;BO,CABLE=%s;SY:us-east-1",
+					"%s:%s:100:%s,%s,UNPLUGGED=false;BO,PLUGGED=true;BO,CABLE=%s;SY:us-east-1",
 					METRICS_HEADSET_GROUP_ID, METRICS_HEADSET_JACK_SCHEMA_ID, PREDEFINED_ESSENTIAL_KEY,
-					accdet_metrics_cable_string[accdet->cable_type]);
+					PREDEFINED_DEVICE_ID_KEY, accdet_metrics_cable_string[accdet->cable_type]);
 			}
 #elif IS_ENABLED(CONFIG_AMAZON_METRICS_LOG)
 			if (accdet->pre_status == PLUG_OUT && (accdet->cable_type < HEADSET_FIVE_POLE)) {

@@ -66,12 +66,15 @@ struct KREE_SHAREDMEM_PARAM {
  *
  * @KREE_MEM_SEC_MEM: static secure memory carved out from trustzone, and compatible with original use.
  * @KREE_MEM_SEC_CM_TZ: static chunk memory carved out from trustzone, and compatible with original use.
- * @KREE_MEM_SEC_CM_CMA: dynamic chunk memory carved out from CMA.
+ * @KREE_MEM_SEC_CM_CMA_WFD: dynamic chunk memory carved out from CMA for WFD.
+ * @KREE_MEM_SEC_CM_CMA_SVP: dynamic chunk memory carved out from CMA for SVP.
  */
 enum kree_mem_type {
+	/* original memory type */
 	KREE_MEM_SEC_MEM,
 	KREE_MEM_SEC_CM_TZ,
-	KREE_MEM_SEC_CM_CMA
+	KREE_MEM_SEC_CM_CMA_WFD,
+	KREE_MEM_SEC_CM_CMA_SVP,
 };
 
 /* map_p: 0 = no remap, 1 = remap */
@@ -482,7 +485,7 @@ int KREE_StopSecurechunkmemSvc(KREE_SESSION_HANDLE session,
 int KREE_QuerySecurechunkmem(KREE_SESSION_HANDLE session,
 				unsigned long *cm_pa, uint32_t *size);
 
-#if IS_ENABLED(CONFIG_MTEE_CMA_SECURE_MEMORY)
+#if IS_ENABLED(CONFIG_WFD_DYNAMIC_SEC_BUF)
 /**
  * REE service call to allocate chunk memory
  *
@@ -492,7 +495,7 @@ int KREE_QuerySecurechunkmem(KREE_SESSION_HANDLE session,
  * @param uparam     the exchange buffer for parameters.
  * @param return     return code.
  */
-int KREE_ServGetChunkmemPool(u32 op,
+int KREE_ServGetWFDChunkmemPool(u32 op,
 				   u8 uparam[REE_SERVICE_BUFFER_SIZE]);
 
 /**
@@ -504,9 +507,36 @@ int KREE_ServGetChunkmemPool(u32 op,
  * @param uparam     the exchange buffer for parameters.
  * @param return     return code.
  */
-int KREE_ServReleaseChunkmemPool(u32 op,
+int KREE_ServReleaseWFDChunkmemPool(u32 op,
 				       u8 uparam[REE_SERVICE_BUFFER_SIZE]);
-#endif  /* CONFIG_MTEE_CMA_SECURE_MEMORY */
+#endif  /* CONFIG_WFD_DYNAMIC_SEC_BUF */
+
+#if IS_ENABLED(CONFIG_SVP_DYNAMIC_SEC_BUF)
+/**
+ * REE service call to allocate SVP chunk memory
+ *
+ * Allocate the continuouse memory for TEE SVP secure chunk memory
+ *
+ * @param op         will be KREE_SERV_GET_CHUNK_MEMPOOL.
+ * @param uparam     the exchange buffer for parameters.
+ * @param return     return code.
+ */
+int KREE_ServGetSVPChunkmemPool(u32 op,
+				u8 uparam[REE_SERVICE_BUFFER_SIZE]);
+
+/**
+ * REE service call to release SVP cma memory
+ *
+ * Release the continuouse memory from TEE SVP secure chunk memory
+ *
+ * @param op         will be KREE_SERV_GET_CHUNK_MEMPOOL.
+ * @param uparam     the exchange buffer for parameters.
+ * @param return     return code.
+ */
+int KREE_ServReleaseSVPChunkmemPool(u32 op,
+				    u8 uparam[REE_SERVICE_BUFFER_SIZE]);
+
+#endif /* CONFIG_SVP_DYNAMIC_SEC_BUF */
 
 #endif	/* CONFIG_MTK_IN_HOUSE_TEE_SUPPORT || CONFIG_TRUSTY*/
 #endif	/* __KREE_MEM_H__ */

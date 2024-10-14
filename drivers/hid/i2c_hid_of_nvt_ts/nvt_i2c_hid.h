@@ -35,6 +35,11 @@
 #include "stylus_battery_algo.h"
 #endif
 
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+#include "hid_touch_metrics.h"
+extern touch_metrics_info_t touch_metrics_data;
+#endif
+
 // Do NOT turn this on in official release driver
 #define NO_PEN_SELFTEST 0
 #define CHECK_DATA_CHECKSUM 1

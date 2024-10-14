@@ -473,9 +473,9 @@ static void pwrkey_log_to_metrics(struct work_struct *data)
 
 	if (amazon_logger && amazon_logger->minerva_metrics_log) {
 		amazon_logger->minerva_metrics_log(buf, PWRKEY_METRICS_STR_LEN,
-		"%s:%s:100:%s,report_action_is_action=%s;SY:us-east-1",
+		"%s:%s:100:%s,%s,report_action_is_action=%s;SY:us-east-1",
 		METRICS_PWRKEY_GROUP_ID, METRICS_PWRKEY_SCHEMA_ID,
-		PREDEFINED_ESSENTIAL_KEY, action);
+		PREDEFINED_ESSENTIAL_KEY, PREDEFINED_DEVICE_ID_KEY, action);
 	}
 }
 #endif

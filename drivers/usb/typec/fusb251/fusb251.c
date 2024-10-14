@@ -842,10 +842,11 @@ static void fusb251_report_event(struct fusb251 *fusb251, int event)
 
 #if IS_ENABLED(CONFIG_AMAZON_MINERVA_METRICS_LOG)
 		minerva_metrics_log(g_fusb_buf, METRICS_BUFF_SIZE_FUSB251,
-				"%s:%s:100:%s,%s,%s,ld_current_state=%d;IN,ld_previous_state=%d;IN,"
+				"%s:%s:100:%s,%s,%s,%s,ld_current_state=%d;IN,ld_previous_state=%d;IN,"
 				"ld_duration_sec=%d;IN:us-east-1",
 				METRICS_LD_GROUP_ID, METRICS_LD_SCHEMA_ID, PREDEFINED_ESSENTIAL_KEY,
-				PREDEFINED_MODEL_KEY, PREDEFINED_TZ_KEY, event, pre_event, duration_sec);
+				PREDEFINED_MODEL_KEY, PREDEFINED_TZ_KEY, PREDEFINED_DEVICE_ID_KEY,
+				event, pre_event, duration_sec);
 #endif
 
 		memcpy(&fusb251->event_ts, &now_ts, sizeof(struct timespec64));

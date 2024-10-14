@@ -16,7 +16,7 @@
 /* flash manufacturer idenfication */
 typedef enum {
 	FLASH_MFR_UNKNOWN = 0x00,
-	FLASH_MFR_PUYA = 0x0B,
+	FLASH_MFR_PUYA = 0x85,
 	FLASH_MFR_ESMT = 0x1C,
 	FLASH_MFR_MACRONIX = 0xC2, /* Macronix */
 	FLASH_MFR_GIGADEVICE = 0xC8, /* GigaDevice */
@@ -83,7 +83,7 @@ static const flash_info_t flash_info_table[] = {
 	  .qeb_info = { .qeb_pos = QEB_POS_OTHER, .qeb_order = 0xFF },
 	  .rd_method = SISO_0x03,
 	  .prog_method = SPP_0x02,
-	  .wrsr_method = WRSR_01H1BYTE,
+	  .wrsr_method = WRSR_01H2BYTE,
 	  .rdsr1_cmd = 0x35 },
 	{ .mid = FLASH_MFR_GIGADEVICE,
 	  .did = FLASH_DID_ALL,

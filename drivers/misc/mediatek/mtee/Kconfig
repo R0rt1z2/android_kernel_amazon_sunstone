@@ -20,7 +20,7 @@ config MTEE_CMA_SECURE_MEMORY
 	depends on OF
 	depends on CMA
 	depends on (MTK_IN_HOUSE_TEE_SUPPORT) || (TEE)
-	depends on (WFD_DYNAMIC_SEC_BUF)
+	depends on (WFD_DYNAMIC_SEC_BUF) || (SVP_DYNAMIC_SEC_BUF)
 	help
 	  Enable allocation secure memory from CMA to free the memory
 	  back to Linux CMA when secure memory buffer was not used.

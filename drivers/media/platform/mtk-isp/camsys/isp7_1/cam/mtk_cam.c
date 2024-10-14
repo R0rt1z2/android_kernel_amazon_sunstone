@@ -4873,13 +4873,23 @@ void mtk_cam_sensor_switch_stop_reinit_hw(struct mtk_cam_ctx *ctx,
 		}
 		/* Twin */
 		if (ctx->pipe->res_config.raw_num_used != 1) {
-			struct mtk_raw_device *raw_dev_slave =
+			struct mtk_raw_device *raw_dev_sub =
 						get_slave_raw_dev(cam, ctx->pipe);
-			stream_on(raw_dev_slave, 0);
+			if (!raw_dev_sub) {
+				dev_err(ctx->cam->dev, "%s: raw_dev_sub is not found\n",
+					__func__);
+				return;
+			}
+			stream_on(raw_dev_sub, 0);
 			if (ctx->pipe->res_config.raw_num_used == 3) {
-				struct mtk_raw_device *raw_dev_slave2 =
+				struct mtk_raw_device *raw_dev_sub2 =
 					get_slave2_raw_dev(cam, ctx->pipe);
-				stream_on(raw_dev_slave2, 0);
+				if (!raw_dev_sub2) {
+					dev_err(ctx->cam->dev, "%s: raw_dev_sub2 is not found\n",
+						__func__);
+					return;
+				}
+				stream_on(raw_dev_sub2, 0);
 			}
 		}
 	}
@@ -4948,13 +4958,23 @@ void mtk_cam_sensor_switch_stop_reinit_hw(struct mtk_cam_ctx *ctx,
 				subsample_enable(raw_dev);
 			/* Twin */
 			if (ctx->pipe->res_config.raw_num_used != 1) {
-				struct mtk_raw_device *raw_dev_slave =
+				struct mtk_raw_device *raw_dev_sub =
 				get_slave_raw_dev(cam, ctx->pipe);
-				initialize(raw_dev_slave, 1);
+				if (!raw_dev_sub) {
+					dev_err(ctx->cam->dev, "%s:raw_dev_sub is not found\n",
+						__func__);
+					return;
+				}
+				initialize(raw_dev_sub, 1);
 				if (ctx->pipe->res_config.raw_num_used == 3) {
-					struct mtk_raw_device *raw_dev_slave2 =
+					struct mtk_raw_device *raw_dev_sub2 =
 						get_slave2_raw_dev(cam, ctx->pipe);
-					initialize(raw_dev_slave2, 1);
+				if (!raw_dev_sub2) {
+					dev_err(ctx->cam->dev, "%s:raw_dev_sub2 is not found\n",
+						__func__);
+					return;
+				}
+					initialize(raw_dev_sub2, 1);
 				}
 			}
 		}
@@ -6323,13 +6343,25 @@ int mtk_cam_ctx_stream_on(struct mtk_cam_ctx *ctx)
 				subsample_enable(raw_dev);
 			/* Twin */
 			if (ctx->pipe->res_config.raw_num_used != 1) {
-				struct mtk_raw_device *raw_dev_slave =
+				struct mtk_raw_device *raw_dev_sub =
 							get_slave_raw_dev(cam, ctx->pipe);
-				initialize(raw_dev_slave, 1);
+				if (!raw_dev_sub) {
+					dev_err(cam->dev,
+						"%s: raw_dev_sub is not found\n",
+						__func__);
+					goto fail_img_buf_release;
+				}
+				initialize(raw_dev_sub, 1);
 				if (ctx->pipe->res_config.raw_num_used == 3) {
-					struct mtk_raw_device *raw_dev_slave2 =
+					struct mtk_raw_device *raw_dev_sub2 =
 						get_slave2_raw_dev(cam, ctx->pipe);
-					initialize(raw_dev_slave2, 1);
+					if (!raw_dev_sub2) {
+						dev_err(cam->dev,
+							"%s: raw_dev_sub2 is not found\n",
+							__func__);
+						goto fail_img_buf_release;
+					}
+					initialize(raw_dev_sub2, 1);
 				}
 			}
 		}
@@ -6545,13 +6577,25 @@ int mtk_cam_ctx_stream_on(struct mtk_cam_ctx *ctx)
 				subsample_enable(raw_dev);
 			/* Twin */
 			if (ctx->pipe->res_config.raw_num_used != 1) {
-				struct mtk_raw_device *raw_dev_slave =
+				struct mtk_raw_device *raw_dev_sub =
 				get_slave_raw_dev(cam, ctx->pipe);
-				initialize(raw_dev_slave, 1);
+				if (!raw_dev_sub) {
+					dev_err(cam->dev,
+						"%s:raw_dev_sub is not found\n",
+						__func__);
+					goto fail_img_buf_release;
+				}
+				initialize(raw_dev_sub, 1);
 				if (ctx->pipe->res_config.raw_num_used == 3) {
-					struct mtk_raw_device *raw_dev_slave2 =
+					struct mtk_raw_device *raw_dev_sub2 =
 						get_slave2_raw_dev(cam, ctx->pipe);
-					initialize(raw_dev_slave2, 1);
+					if (!raw_dev_sub2) {
+						dev_err(cam->dev,
+							"%s:raw_dev_sub2 is not found\n",
+							__func__);
+						goto fail_img_buf_release;
+					}
+					initialize(raw_dev_sub2, 1);
 				}
 			}
 		}

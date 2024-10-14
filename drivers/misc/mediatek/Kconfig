@@ -31,11 +31,17 @@ menu "MultiMedia, Display, Camera"
 
 config WFD_DYNAMIC_SEC_BUF
 	bool "Enable MTK WFD Dynamic Secure Buffer Support"
-	default n
 	depends on (MTK_IN_HOUSE_TEE_SUPPORT) || (TEE)
 	help
 		This configure enables Miracast to allocate its secure memory
 		by CMA dynamically.
+
+config SVP_DYNAMIC_SEC_BUF
+	bool "Enable MTK SVP Dynamic Secure Buffer Support"
+	depends on (MTK_IN_HOUSE_TEE_SUPPORT) || (TEE)
+	help
+		This configure enables SVP to allocate its secure memory by
+		CMA dynamically.
 
 source "drivers/misc/mediatek/iommu/Kconfig"
 source "drivers/misc/mediatek/cameraisp/Kconfig"

@@ -54,12 +54,12 @@ do { \
 
 static void bat_metrics_minerva_log(char *event)
 {
-	char *fmt = "%s:%s:100:%s,%s,ui_soc=%d;IN,soc=%d;IN,temp=%d;IN,vbat=%d;IN,"
+	char *fmt = "%s:%s:100:%s,%s,%s,ui_soc=%d;IN,soc=%d;IN,temp=%d;IN,vbat=%d;IN,"
 		"ibat=%d;IN,event=%s;SY:us-east-1";
 
 	minerva_metrics_log(g_metrics_buf, BATTERY_METRICS_BUFF_SIZE, fmt,
 		METRICS_BATTERY_GROUP_ID, METRICS_BATTERY_SCHEMA_ID,
-		PREDEFINED_ESSENTIAL_KEY, PREDEFINED_TZ_KEY,
+		PREDEFINED_ESSENTIAL_KEY, PREDEFINED_TZ_KEY, PREDEFINED_DEVICE_ID_KEY,
 		metrics_data.gm->ui_soc, metrics_data.gm->soc, metrics_data.gm->cur_bat_temp,
 		metrics_data.gm->vbat, metrics_data.gm->ibat / 10, event);
 }
@@ -114,9 +114,9 @@ int bat_metrics_adapter_power(u32 type, u32 aicl_ma)
 		return 0;
 
 	minerva_metrics_log(g_metrics_buf, BATTERY_METRICS_BUFF_SIZE,
-		"%s:%s:100:%s,%s,adapter_power_mw=%d;IN,aicl_ma=%d;IN:us-east-1",
+		"%s:%s:100:%s,%s,%s,adapter_power_mw=%d;IN,aicl_ma=%d;IN:us-east-1",
 		METRICS_BATTERY_GROUP_ID, METRICS_BATTERY_ADAPTER_SCHEMA_ID,
-		PREDEFINED_ESSENTIAL_KEY, PREDEFINED_TZ_KEY,
+		PREDEFINED_ESSENTIAL_KEY, PREDEFINED_TZ_KEY, PREDEFINED_DEVICE_ID_KEY,
 		power_category[type], (aicl_ma < 0) ? 0 : aicl_ma);
 #elif IS_ENABLED(CONFIG_AMAZON_METRICS_LOG)
 	static const char * const category_text[] = {

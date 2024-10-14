@@ -19,6 +19,10 @@
 #include "ilitek_9882t_fw.h"
 #include "ilitek_9882t.h"
 
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+touch_metrics_info_t touch_metrics_data;
+#endif
+
 /* Debug level */
 bool debug_en = DEBUG_OUTPUT;
 
@@ -541,6 +545,9 @@ int ili_hid_fw_upgrade_handler(void *data)
 #endif
 #endif
 		ilits->fw_update_stat = FW_UPDATE_PASS;
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.bootup_status = BOOT_UP_SUCCESS;
+#endif
 	}
 
 	ilitek_hid_tddi_flash_protect(ENABLE, OFF); //flash protect for i2c project
@@ -549,6 +556,12 @@ int ili_hid_fw_upgrade_handler(void *data)
 	panel_fw_upgrade_mode_set_by_ilitek(false);
 
 	atomic_set(&ilits->fw_stat, END);
+
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	touch_metrics_data.fw_version = (ilits->chip->fw_ver >> 8) & 0xFF;
+	tp_metrics_print_func(touch_metrics_data);
+#endif
+
 	if (!ilits->boot)
 		ilits->boot = true;
 	return ret;
@@ -1046,6 +1059,12 @@ int ili_hid_tddi_init(void)
 
 	ilits->pen_serial = INVALID_PEN_SERIAL;
 	ilits->hid_report_irq = false;
+
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	touch_metrics_data.fw_version = DEFAULT_FW_VERSION;
+	touch_metrics_data.bootup_status = BOOT_UP_INIT_STATUS;
+	touch_metrics_data.fw_upgrade_result = FW_UPGRADE_STATE_INIT;
+#endif
 
 	ili_hid_ic_init();
 	ilitek_tddi_wq_init();

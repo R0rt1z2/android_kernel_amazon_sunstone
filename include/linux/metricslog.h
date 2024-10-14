@@ -65,12 +65,18 @@
 /* group name: TabletBspVitalsPower */
 #define VITALS_POWER_GROUP_ID "p4qtuscn"
 
+/* Group name: TabletBspMetricInputTouch */
+#define MINERVA_INPUT_TOUCH_GROUP_ID "pgw4d7mr"
+
+/* Group name: TabletBspMetricStylusBatteryAlgo */
+#define MINERVA_STYLUS_BATTERY_ALGO_GROUP_ID MINERVA_INPUT_TOUCH_GROUP_ID
+
 /* Schema ID */
 /* Schema name: TabletBspMetricsKeyboard */
 #define METRICS_KEYBOARD_SCHEMA_ID "h83q/2/04330403"
 
-/* Schema name: TabletBspInputEventSupportChild */
-#define METRICS_INPUT_SCHEMA_ID "9okq/2/03330410"
+/* Schema name: InputTrackEventRequested */
+#define METRICS_INPUT_SCHEMA_ID "y963/2/02330430"
 
 /* Schema name: TabletBspStylusEventNonAnonymous */
 #define METRICS_STYLUS_SCHEMA_ID "i196/2/02330413"
@@ -90,23 +96,23 @@
 /* schema name: TabletBspMetricLCDEventSupportChild */
 #define METRICS_LCD_SCHEMA_ID "4pbc/2/02330410"
 
-/* schema name: TabletBspMetricLDEeventSupportChild */
-#define METRICS_LD_SCHEMA_ID "3cxd/2/02330410"
+/* schema name: LDEeventSupportRequested */
+#define METRICS_LD_SCHEMA_ID "s5w2/2/02330430"
 
-/* schema name: TabletBspMetricBatteryEventsSupportChild */
-#define METRICS_BATTERY_SCHEMA_ID "q49n/2/02330410"
+/* schema name: BatteryEventsSupportRequested */
+#define METRICS_BATTERY_SCHEMA_ID "qran/2/02330430"
 
-/* schema name: TabletBspMetricBatteryAdapterSupportChild */
-#define METRICS_BATTERY_ADAPTER_SCHEMA_ID "0x69/2/02330410"
+/* schema name: BatteryAdapterSupportRequested */
+#define METRICS_BATTERY_ADAPTER_SCHEMA_ID "vzqo/2/02330430"
 
-/* schema name: TabletBspMetricJackEventSupportChild */
-#define METRICS_HEADSET_JACK_SCHEMA_ID "8t50/2/02330410"
+/* schema name: JackEventSupportRequested */
+#define METRICS_HEADSET_JACK_SCHEMA_ID "cr53/2/02330430"
 
-/* schema name: TabletBspMetricHeadsetKeyEventSupportChild */
-#define METRICS_HEADSET_KEY_SCHEMA_ID "28lb/2/02330410"
+/* schema name: HeadsetKeyEventSupportRequested */
+#define METRICS_HEADSET_KEY_SCHEMA_ID "jk8g/2/02330430"
 
-/* schema name: TabletBspMetricsPwrkeyEventSupportChild */
-#define METRICS_PWRKEY_SCHEMA_ID "044f/2/02330410"
+/* schema name: PwrkeyEventSupportRequested */
+#define METRICS_PWRKEY_SCHEMA_ID "ed3a/2/02330430"
 
 /* schema name: TabletBspMetricsKeyboard */
 #define METRICS_KEYBOARD_ANON_SCHEMA_ID "yrk0/2/06330400"
@@ -120,20 +126,26 @@
 /* schema name: TabletBspVitalsDSPTimerSupportChild */
 #define VITALS_DSP_TIMER_SCHEMA_ID "6r0g/2/02330410"
 
-/* schema name: TabletBSPVitalsThermalThrottleSupportChild */
-#define VITALS_THERMAL_THROTTLE_SCHEMA_ID "0fu8/2/02330410"
+/* schema name: ThermalThrottleSupportRequested */
+#define VITALS_THERMAL_THROTTLE_SCHEMA_ID "um49/2/02330430"
 
-/* schema name: TabletBSPVitalsThermalSensorSupportChild */
-#define VITALS_THERMAL_SENSOR_SCHEMA_ID "s91k/2/02330410"
+/* schema name: ThermalSensorSupportRequested */
+#define VITALS_THERMAL_SENSOR_SCHEMA_ID "jaq9/2/02330430"
 
 /* schema name: TabletBspVitalseMMcCounterSupportChild */
 #define VITALS_EMMC_SCHEMA_ID "u951/2/02330410"
 
-/* schema name: TabletBspVitalsBatteryDrainSupportChild */
-#define VITALS_BATTERY_DRAIN_SCHEMA_ID "aulo/2/02330410"
+/* schema name: BatteryScreenDrainSupportRequested */
+#define VITALS_BATTERY_DRAIN_SCHEMA_ID "lyfr/2/02330430"
 
-/* schema name: TabletBspVitalsBatteryAgingSupportChild */
-#define VITALS_BATTERY_AGING_SCHEMA_ID "bwex/2/02330410"
+/* schema name: BatteryAgingSupportRequested */
+#define VITALS_BATTERY_AGING_SCHEMA_ID "ocf0/2/02330430"
+
+/* Schema name: TabletBspInputTouchEventNonAnonymous */
+#define MINERVA_INPUT_TOUCH_SCHEMA_ID "yb41/2/10330430"
+
+/* Schema name: TabletBspStylusBatteryAlgoEventNonAnonymous */
+#define MINERVA_STYLUS_BATTERY_ALGO_SCHEMA_ID "1ayv/2/02330430"
 
 /* predefined key */
 /* required keys */

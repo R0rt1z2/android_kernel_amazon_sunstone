@@ -160,6 +160,10 @@ static const struct i2c_hid_cmd hid_wkg_on_cmd = { I2C_HID_CMD(0x0E) };
 static const struct i2c_hid_cmd hid_wkg_off_cmd = { I2C_HID_CMD(0x0F) };
 static const struct i2c_hid_cmd hid_no_cmd = { .length = 0 };
 
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+touch_metrics_info_t touch_metrics_data;
+#endif
+
 extern void panel_gesture_mode_set_by_nt36523b(bool gst_mode);
 
 struct i2c_hid {
@@ -369,6 +373,10 @@ static int i2c_hid_hwreset(struct i2c_client *client)
 	ret = i2c_hid_command(client, &hid_reset_cmd, NULL, 0);
 	if (ret) {
 		NVT_ERR("failed to reset device.\n");
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.bootup_status = HID_HW_RESET_FAIL;
+		tp_metrics_print_func(touch_metrics_data);
+#endif
 		i2c_hid_set_power(client, I2C_HID_PWR_SLEEP);
 		goto out_unlock;
 	}
@@ -1181,6 +1189,11 @@ static int nvt_i2c_hid_driver_load(void)
 	struct kobject *touchscreen_link = NULL;
 	struct i2c_client *client = NULL;
 	struct hid_report *report = NULL;
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	touch_metrics_data.fw_version = DEFAULT_FW_VERSION;
+	touch_metrics_data.bootup_status = BOOT_UP_INIT_STATUS;
+	touch_metrics_data.fw_upgrade_result = FW_UPGRADE_STATE_INIT;
+#endif
 
 	mutex_lock(&probe_lock);
 	hid_i2c_dev = &hid_i2c_client->dev;
@@ -1321,8 +1334,13 @@ static int nvt_i2c_hid_driver_load(void)
 
 	// now probe HID
 	ret = i2c_hid_fetch_hid_descriptor(ihid);
-	if (ret < 0)
+	if (ret < 0) {
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.bootup_status = HID_DESCRIPTOR_ERROR;
+		tp_metrics_print_func(touch_metrics_data);
+#endif
 		goto err_regulator;
+	}
 
 	ret = i2c_hid_init_irq(hid_i2c_client);
 	if (ret < 0)
@@ -1352,6 +1370,10 @@ static int nvt_i2c_hid_driver_load(void)
 	if (ret) {
 		if (ret != -ENODEV)
 			NVT_ERR("can't add hid device: %d\n", ret);
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.bootup_status = ADD_HID_DEVICE_FAIL;
+		tp_metrics_print_func(touch_metrics_data);
+#endif
 		goto err_mem_free;
 	}
 

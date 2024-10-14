@@ -74,9 +74,14 @@ struct ion_sec_heap ion_svp_heap[] = {
 	{	.name = "ion_svp_heap",
 		.type = KREE_MEM_SEC_CM_TZ,
 	},
-#if IS_ENABLED(CONFIG_MTEE_CMA_SECURE_MEMORY)
+#if IS_ENABLED(CONFIG_WFD_DYNAMIC_SEC_BUF)
 	{	.name = "ion_svp_wfd_heap",
-		.type = KREE_MEM_SEC_CM_CMA,
+		.type = KREE_MEM_SEC_CM_CMA_WFD,
+	},
+#endif
+#if IS_ENABLED(CONFIG_SVP_DYNAMIC_SEC_BUF)
+	{	.name = "ion_svp_2nd_heap",	/* for dual svp */
+		.type = KREE_MEM_SEC_CM_CMA_SVP,
 	},
 #endif
 };

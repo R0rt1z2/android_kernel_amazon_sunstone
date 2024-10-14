@@ -1229,4 +1229,6 @@ source "drivers/hid/hid-focal/Kconfig"
 
 source "drivers/hid/stylus/Kconfig"
 
+source "drivers/hid/hid_touch_metrics/Kconfig"
+
 endmenu

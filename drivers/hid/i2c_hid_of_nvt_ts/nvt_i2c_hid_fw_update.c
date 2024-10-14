@@ -1739,19 +1739,41 @@ void nvt_fwupg_work(struct work_struct *work)
 	nvt_sw_reset_and_idle();
 	ret = Boot_Update_Firmware();
 	if (ret == NT36523N_FW_NO_DEED_UPGRADE) {
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.fw_upgrade_result = FW_NO_NEED_UPGRADE;
+#endif
 		NVT_LOG("No need to upgrade\n");
 		nvt_bootloader_reset();
 	} else if (ret == NT36523N_FW_UPGRADE_SUCCESS) {
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.fw_upgrade_result = FW_UPGRADE_PASS;
+#endif
 		NVT_LOG("Upgrade fw success\n");
 	} else {
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.fw_upgrade_result = FW_UPGRADE_FAIL;
+#endif
 		NVT_ERR("Upgrade fw failed\n");
 	}
 
 	mutex_lock(&ts->lock);
-	if (nvt_check_fw_reset_state(RESET_STATE_NORMAL_RUN))
+	if (nvt_check_fw_reset_state(RESET_STATE_NORMAL_RUN)) {
 		NVT_ERR("check fw reset state failed!\n");
-	else
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.bootup_status = FW_RESET_STATUS_FAIL;
+#endif
+	} else {
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.bootup_status = BOOT_UP_SUCCESS;
+#endif
 		ts->touch_ready = 1;
+	}
+
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	touch_metrics_data.fw_version = ts->fw_ver;
+	tp_metrics_print_func(touch_metrics_data);
+#endif
+
 	mutex_unlock(&ts->lock);
 }
 

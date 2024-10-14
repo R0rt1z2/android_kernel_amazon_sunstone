@@ -14,6 +14,9 @@
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+#include "hid_touch_metrics.h"
+#endif
 
 /* stylus uevent size */
 #define ENV_SIZE 32

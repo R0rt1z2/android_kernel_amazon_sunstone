@@ -193,6 +193,10 @@ static const struct i2c_hid_quirks {
 	{ 0, 0 }
 };
 
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+touch_metrics_info_t touch_metrics_data;
+#endif
+
 /*
  * i2c_hid_lookup_quirk: return any quirks associated with a I2C HID device
  * @idVendor: the 16-bit vendor ID
@@ -468,6 +472,10 @@ static int i2c_hid_hwreset(struct i2c_client *client)
 	ret = i2c_hid_command(client, &hid_reset_cmd, NULL, 0);
 	if (ret) {
 		dev_err(&client->dev, "failed to reset device.\n");
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.bootup_status = HID_HW_RESET_FAIL;
+		tp_metrics_print_func(touch_metrics_data);
+#endif
 		i2c_hid_set_power(client, I2C_HID_PWR_SLEEP);
 		goto out_unlock;
 	}
@@ -1034,6 +1042,11 @@ static int i2c_hid_probe(struct i2c_client *client,
 	__u16 hidRegister;
 	struct i2c_hid_platform_data *platform_data = client->dev.platform_data;
 	struct device_node *np = client->dev.of_node;
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	touch_metrics_data.fw_version = DEFAULT_FW_VERSION;
+	touch_metrics_data.bootup_status = BOOT_UP_INIT_STATUS;
+	touch_metrics_data.fw_upgrade_result = FW_UPGRADE_STATE_INIT;
+#endif
 
 	dbg_hid("HID probe called for i2c 0x%02x\n", client->addr);
 	/* Make sure there is something at this address */
@@ -1126,8 +1139,13 @@ static int i2c_hid_probe(struct i2c_client *client,
 	}
 
 	ret = i2c_hid_fetch_hid_descriptor(ihid);
-	if (ret < 0)
+	if (ret < 0) {
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.bootup_status = HID_DESCRIPTOR_ERROR;
+		tp_metrics_print_func(touch_metrics_data);
+#endif
 		goto err_regulator;
+	}
 
 	ret = i2c_hid_init_irq(client);
 	if (ret < 0)
@@ -1159,6 +1177,10 @@ static int i2c_hid_probe(struct i2c_client *client,
 	if (ret) {
 		if (ret != -ENODEV)
 			hid_err(client, "can't add hid device: %d\n", ret);
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		touch_metrics_data.bootup_status = ADD_HID_DEVICE_FAIL;
+		tp_metrics_print_func(touch_metrics_data);
+#endif
 		goto err_mem_free;
 	}
 

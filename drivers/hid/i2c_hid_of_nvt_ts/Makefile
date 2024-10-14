@@ -10,6 +10,7 @@
 #
 ccflags-$(CONFIG_DRM_MEDIATEK_V2) += -I$(srctree)/drivers/gpu/drm/mediatek/mediatek_v2/
 ccflags-y += -I$(srctree)/drivers/hid/stylus/
+ccflags-y += -I$(srctree)/drivers/hid/hid_touch_metrics/
 obj-$(CONFIG_I2C_HID_OF_NVT_TS)				+= i2c-hid-nt36523n.o
 i2c-hid-nt36523n-y := i2c-hid-of-nvt-ts.o \
 		nvt_i2c_hid.o \

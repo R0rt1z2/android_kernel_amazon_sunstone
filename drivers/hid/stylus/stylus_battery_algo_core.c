@@ -11,6 +11,11 @@
  */
 
 #include "stylus_battery_algo.h"
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+static stylus_metrics_info_t stylus_metrics_data;
+struct delayed_work metrics_work;
+static int last_mode;
+#endif
 
 /* stylus device number */
 static dev_t stylus_dev_num;
@@ -19,6 +24,21 @@ static struct class *stylus_class;
 
 /* stylus data */
 static stylus_data_t stylus_data;
+
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+static void metrics_stylus_battery_algo_work(struct work_struct *work)
+{
+	struct delayed_work *dw = container_of(work, struct delayed_work, work);
+
+	stylus_metrics_print_func(stylus_metrics_data);
+	stylus_metrics_data.bat_hw_jitter_cnt = 0;
+	stylus_metrics_data.bat_sw_Jitter_cnt = 0;
+	stylus_metrics_data.low_bat_cnt = 0;
+	stylus_metrics_data.bat_level_mode = 0;
+
+	schedule_delayed_work(dw, TIME_24_HOURS);
+}
+#endif
 
 static int initStylusData(void)
 {
@@ -32,6 +52,9 @@ static int initStylusData(void)
 	stylus_data.circular_buffer->rear = -1;
 	stylus_data.battery_capacity = 0;
 	stylus_data.battery_capacity_filter = 0;
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	last_mode = 0;
+#endif
 
 	return 0;
 }
@@ -95,9 +118,12 @@ static int calculateMode(void)
 	}
 
 	/* skip if there are no enough valid nodes */
-	if (validvote < MIN_SAMPLE_DATA_COUNT)
+	if (validvote < MIN_SAMPLE_DATA_COUNT) {
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		last_mode = 0;
+#endif
 		return NEED_MORE_SAMPLE;
-
+	}
 #ifdef BATTERY_ALGO_V2
 	/*
 	 * return -2 which is an invalid battery level if there max
@@ -154,6 +180,9 @@ static int stylus_battery_capacity_jitter_filter(
 static int stylus_battery_capacity_algo(int capacity, bool *stylus_battery_capacity_changed)
 {
 	int stylus_battery_algo = -1, new_stylus_battery_capacity = -1;
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	static int last_reported_cap;
+#endif
 
 	if (!(stylus_data.circular_buffer) || !stylus_battery_capacity_changed) {
 		STYLUS_ERR("stylus_data.circular_buffer or  is stylus_battery_capacity_changed is NULL\n");
@@ -177,8 +206,30 @@ static int stylus_battery_capacity_algo(int capacity, bool *stylus_battery_capac
 					stylus_data.packet_info.pen_id, stylus_data.packet_info.time,
 					stylus_data.packet_info.capacity, stylus_battery_algo,
 					new_stylus_battery_capacity);
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+			/* determine if there is sw jitter in the stylus battery value */
+			if (last_reported_cap &&
+			    abs(new_stylus_battery_capacity - last_reported_cap) >
+			    STYLUS_BATTERY_JITTER_THRESHOLD)
+				stylus_metrics_data.bat_sw_Jitter_cnt = 1;
+			last_reported_cap = new_stylus_battery_capacity;
+#endif
 		}
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		if (last_mode && last_mode != stylus_battery_algo) {
+			if (new_stylus_battery_capacity <= LOW_BATTERY_LEVEL)
+				stylus_metrics_data.low_bat_cnt = 1;
+			stylus_metrics_print_func(stylus_metrics_data);
+			stylus_metrics_data.bat_hw_jitter_cnt = 0;
+			stylus_metrics_data.bat_sw_Jitter_cnt = 0;
+			stylus_metrics_data.low_bat_cnt = 0;
+		} else { // it says it is the first time the battery been updated
+			stylus_metrics_data.bat_level_mode = stylus_battery_algo;
+		}
+		last_mode = stylus_battery_algo;
+#endif
 	}
+
 	STYLUS_DEBUG("%s pen %2x time %2lld bat %2d mode %2d out %2d\n",
 			__FUNCTION__,
 			stylus_data.packet_info.pen_id, stylus_data.packet_info.time,
@@ -220,6 +271,9 @@ int stylus_info_process(void)
 	int new_stylus_battery_capacity = 0;
 	bool stylus_battery_capacity_changed = false;
 	static uint32_t prev_pen_id = INVALID_PEN_ID;
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	static int last_stylus_capacity;
+#endif
 
 	if (!stylus_dev || !(stylus_data.circular_buffer) || !(stylus_data.uevent_info)) {
 		STYLUS_ERR("stylus device or stylus data is NULL\n");
@@ -245,12 +299,26 @@ int stylus_info_process(void)
 	if (prev_pen_id != stylus_data.packet_info.pen_id) {
 		STYLUS_INFO("%s new pen %x, prev_pen %x.\n", __FUNCTION__, stylus_data.packet_info.pen_id, prev_pen_id);
 		prev_pen_id = stylus_data.packet_info.pen_id;
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+		stylus_metrics_data.stylus_id = prev_pen_id;
+		stylus_metrics_data.fw_version = stylus_data.packet_info.fw_version;
+		last_stylus_capacity = 0;
+#endif
 		ret = initStylusData();
 		if (ret < 0) {
 			STYLUS_ERR("%s, new pen, initStylusData failed.\n", __FUNCTION__);
 			return -EINVAL;
 		}
 	}
+
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	/* determine if there is hw jitter in the stylus battery value */
+	if (last_stylus_capacity &&
+	    abs(stylus_data.packet_info.capacity - last_stylus_capacity) >
+	    STYLUS_BATTERY_JITTER_THRESHOLD)
+		stylus_metrics_data.bat_hw_jitter_cnt++;
+	last_stylus_capacity = stylus_data.packet_info.capacity;
+#endif
 
 	new_stylus_battery_capacity =  stylus_battery_capacity_algo(stylus_data.packet_info.capacity,
 			&stylus_battery_capacity_changed);
@@ -375,6 +443,11 @@ static int __init stylus_uevent_init(void)
 		goto stylus_debug_init_failed;
 	}
 
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	INIT_DELAYED_WORK(&metrics_work, metrics_stylus_battery_algo_work);
+	schedule_delayed_work(&metrics_work, TIME_24_HOURS);
+#endif
+
 	STYLUS_INFO("%s out.\n", __FUNCTION__);
 	return 0;
 
@@ -400,6 +473,9 @@ static void __exit stylus_uevent_exit(void)
 		class_destroy(stylus_class);
 	stylus_dev_remove_drvdata();
 	stylus_debug_deinit(stylus_dev);
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	cancel_delayed_work(&metrics_work);
+#endif
 }
 
 module_init(stylus_uevent_init);

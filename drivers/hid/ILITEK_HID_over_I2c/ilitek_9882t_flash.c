@@ -797,6 +797,9 @@ static int ili_hid_fw_version_check(void)
 			return NEED_UPDATE;
 		} else {
 			ILI_INFO("FW version is the latest or the same , don't have to upgrade FW.\n");
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+			touch_metrics_data.fw_upgrade_result = FW_NO_NEED_UPGRADE;
+#endif
 		}
 	}
 
@@ -1109,6 +1112,10 @@ static int ilitek_fw_flash_upgrade(u8 *pfw, bool mcu)
 	ret = ilitek_tddi_flash_fw_crc_check(pfw);
 	if (ret == UPDATE_FAIL)
 		return -EFW_CRC;
+
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+	touch_metrics_data.fw_upgrade_result = FW_UPGRADE_PASS;
+#endif
 
 	/* We do have to reset chip in order to move new code from flash to iram. */
 	if (ilits->cascade_info_block.nNum != 0) {
@@ -1701,6 +1708,9 @@ int ili_hid_fw_upgrade(int op)
 		} while (--retry > 0);
 
 		if (ret != UPDATE_PASS) {
+#if IS_ENABLED(CONFIG_HID_TOUCH_METRICS)
+			touch_metrics_data.fw_upgrade_result = FW_UPGRADE_FAIL;
+#endif
 			ILI_ERR("Failed to upgrade fw %d times, erasing flash\n",
 				retry);
 			if (ilitek_tddi_fw_flash_erase(OFF) < 0)
