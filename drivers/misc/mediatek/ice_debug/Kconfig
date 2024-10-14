@@ -1,2 +1,0 @@
-config MTK_ICE_DEBUG
-	tristate "ICE_DEBUG"
